@@ -21,4 +21,4 @@ Built with plain HTML, CSS, and JavaScript — no frameworks, no nonsense.
   - Smooth UI updates with player info panels.  
 - **Win condition**: eliminate other players until one remains.
 
-This game is not completely functional, if you like you can always check, fork and add things to the game!
+## This game is not completely functional, if you like you can always check, fork and add things to the code!
