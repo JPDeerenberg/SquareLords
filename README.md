@@ -3,7 +3,7 @@
 A lightweight, browser-based, Risk-inspired strategy game.  
 Built with plain HTML, CSS, and JavaScript — no frameworks, no nonsense.  
 
-## ✨ Features
+## Features
 
 - **2–8 players**: set up a match in the start screen.  
 - **Dynamic board size**: grid scales with number of players.  
@@ -21,4 +21,6 @@ Built with plain HTML, CSS, and JavaScript — no frameworks, no nonsense.
   - Smooth UI updates with player info panels.  
 - **Win condition**: eliminate other players until one remains.
 
-## This game is not completely functional, if you like you can always check, fork and add things to the code!
+## Contribute
+
+This game is not completely functional, if you like you can always check, fork and add things to the code!
