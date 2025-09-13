@@ -35,6 +35,7 @@ Got ideas? Found bugs?
 
 ## Roadmap
 
+- [ ] Add cache or saving mechanism
 - [ ] Add AI opponents 
 - [ ] Online multiplayer  
 - [ ] More themes and board styles  
