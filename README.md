@@ -1,26 +1,49 @@
-# SquareLords (JavaScript Board Game)
+# SquareLords
 
-A lightweight, browser-based, Risk-inspired strategy game.  
-Built with plain HTML, CSS, and JavaScript — no frameworks, no nonsense.  
+SquareLords is a fast-paced, Risk-inspired strategy game built with plain JavaScript, HTML, and CSS. No frameworks, no installs—just open and play.  
+
+Conquer squares, expand your empire, and crush your opponents in a battle for total domination.
+
+---
 
 ## Features
 
-- **2–8 players**: set up a match in the start screen.  
-- **Dynamic board size**: grid scales with number of players.  
-- **Randomized starting troops**: every territory starts with 1–5 pawns.  
-- **Turn system**: players take turns in order, with automatic troop income.  
-- **Randomized reinforcement**: new pawns each round are randomly distributed among your territories.  
-- **Attack mechanics**:  
-  - Select your own territory, then an adjacent enemy territory.  
-  - Attack uses all available pawns (leaving 1 behind).  
-  - Dice roll animations decide the outcome.  
-  - Attacks instantly resolve — no confirmations needed.  
-- **Animations & polish**:  
-  - Dice roll visual.  
-  - Board flash effects on attack.  
-  - Smooth UI updates with player info panels.  
-- **Win condition**: eliminate other players until one remains.
+- Dynamic grid board – board size scales with player count  
+- 2–8 players – play solo vs. AI or pass-and-play with friends  
+- Risk-style combat – attack, defend, and expand your territory  
+- Animated turns – smooth pawn placement and battle resolution  
+- Clean UI & sound effects – immersive experience without clutter  
+- Replayable – every game plays out differently  
 
-## Contribute
+---
 
-This game is not completely functional, if you like you can always check, fork and add things to the code!
+## Play Now
+
+[**Try SquareLords in your browser**](https://jpdeerenberg.github.io/SquareLords/) (GitHub Pages)  
+
+No downloads, no setup. Just start conquering.
+
+---
+
+## Contributing
+
+Got ideas? Found bugs?  
+- Open an [issue](../../issues)  
+- Check out the code and submit a pull request  
+
+---
+
+## Roadmap
+
+- [ ] Add AI opponents 
+- [ ] Online multiplayer  
+- [ ] More themes and board styles  
+- [ ] Mobile-friendly controls
+- [ ] Make the board more clear to use
+- [ ] Bug fixing  
+
+---
+
+## License
+
+MIT – feel free to use, hack, and remix.
