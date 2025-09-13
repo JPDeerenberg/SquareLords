@@ -36,6 +36,7 @@ Got ideas? Found bugs?
 ## Roadmap
 
 - [ ] Add cache or saving mechanism
+- [ ] Add a timer to the end button, so you cannot spam
 - [ ] Add AI opponents 
 - [ ] Online multiplayer  
 - [ ] More themes and board styles  
