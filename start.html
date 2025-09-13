@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Game Start</title>
+<style>
+body {
+font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 40px;
+      background: #111;
+      color: #eee;
+    }
+    .container {
+      max-width: 400px;
+      margin: auto;
+      background: #222;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 0 10px #000;
+    }
+    input[type="range"] {
+      width: 100%;
+    }
+    .value {
+      font-size: 1.5em;
+      margin: 10px 0;
+    }
+    button {
+      background: #28a745;
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      font-size: 1em;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #218838;
+    }
+</style>
+</head>
+<body>
+<div class="container">
+<h1>Welcome to the Game</h1>
+<p id="intro">
+[Insert your deep, life-changing introduction here]
+</p>
+
+<label for="playerCount">Number of Players:</label>
+<input type="range" id="playerCount" min="2" max="8" value="2">
+<div class="value">
+<span id="playerValue">2</span> Players
+</div>
+
+<button id="startBtn">Start Game</button>
+</div>
+
+<script>
+const slider = document.getElementById("playerCount");
+const valueDisplay = document.getElementById("playerValue");
+const startBtn = document.getElementById("startBtn");
+
+slider.addEventListener("input", () => {
+valueDisplay.textContent = slider.value;
+});
+
+startBtn.addEventListener("click", () => {
+const players = slider.value;
+window.location.href = `game.html?players=${players}`;
+});
+</script>
+</body>
+</html>

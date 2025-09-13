@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Battleboard — No Transfers</title>
+<style>
+  :root{
+    --bg:#0f0f12; --panel:#1d1d22; --gap:6px; --accent:#ffb86b;
+  }
+  html,body{height:100%;margin:0;background:var(--bg);color:#e6eef6;font-family:Inter,Segoe UI,Arial,sans-serif}
+  .wrap{max-width:1100px;margin:18px auto;padding:12px;display:flex;flex-direction:column;align-items:center;gap:12px}
+  header{width:100%;display:flex;justify-content:space-between;align-items:center;gap:12px}
+  #turnDisplay{font-weight:700}
+  button{background:#2fb871;border:none;color:#fff;padding:8px 12px;border-radius:8px;cursor:pointer}
+  button:disabled{opacity:.5;cursor:default}
+  #boardPanel{background:var(--panel);padding:12px;border-radius:10px;width:100%;display:flex;justify-content:center;position:relative;overflow:hidden}
+  #board{width:min(90vmin,800px);aspect-ratio:1/1;display:grid;gap:var(--gap);width:100%;height:100%}
+  .cell{display:flex;align-items:center;justify-content:center;font-weight:800;user-select:none;border-radius:8px;box-shadow:0 2px 0 rgba(0,0,0,.4) inset;cursor:pointer;transition:transform .08s,box-shadow .08s,outline-color .12s;position:relative}
+  .cell:hover{transform:translateY(-3px)}
+  .cell.selected{outline:3px solid rgba(255,255,255,.08);box-shadow:0 8px 20px rgba(0,0,0,.6)}
+  .flash-capture{animation:flashCapture .9s ease}
+  .flash-defend{animation:flashDefend .7s ease}
+  @keyframes flashCapture{0%{transform:scale(1.02);box-shadow:0 8px 30px rgba(0,0,0,.6)}50%{transform:scale(1.05)}100%{transform:scale(1.01)}}
+  @keyframes flashDefend{0%{transform:translateY(0)}50%{transform:translateY(-6px) rotate(-2deg)}100%{transform:translateY(0)}}
+
+  /* info / badges */
+  #info{width:100%;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+  .player-badge{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,.03);font-weight:700}
+  .swatch{width:16px;height:16px;border-radius:4px}
+
+  /* battle overlay */
+  #battleOverlay{position:absolute;left:0;right:0;top:0;bottom:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:50}
+  .diceBox{pointer-events:auto;background:rgba(10,10,12,.95);border:1px solid rgba(255,255,255,.06);padding:14px;border-radius:12px;color:#fff;min-width:360px;display:flex;flex-direction:column;gap:10px;align-items:center;backdrop-filter:blur(4px)}
+  .diceRow{display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap}
+  .diceDie{width:46px;height:46px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:22px;background:rgba(255,255,255,.06)}
+  .diceLabel{font-size:13px;opacity:.85}
+  .diceTotals{display:flex;gap:18px;align-items:center;width:100%;justify-content:space-between;font-weight:800}
+  .diceBtn{background:var(--accent);border:none;padding:8px 10px;border-radius:8px;font-weight:800;cursor:pointer}
+
+  /* particle pawn */
+  .pawnParticle{position:absolute;width:14px;height:14px;border-radius:50%;box-shadow:0 1px 0 rgba(0,0,0,.6);transform:translate(-50%,-50%) scale(1);transition:transform .6s ease,left .6s ease,top .6s ease,opacity .4s;z-index:60}
+
+  /* battle log */
+  #battleLog{position:absolute;left:50%;transform:translateX(-50%);top:10px;background:rgba(0,0,0,.55);padding:6px 10px;border-radius:8px;font-weight:800;opacity:0;transition:opacity .25s}
+  #battleLog.show{opacity:1}
+
+  /* camera shake */
+  .shake{animation:shakeAnim .45s cubic-bezier(.12,.9,.3,1)}
+  @keyframes shakeAnim{0%{transform:translate(0,0)}25%{transform:translate(-6px,2px)}50%{transform:translate(3px,-6px)}75%{transform:translate(-2px,4px)}100%{transform:translate(0,0)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div id="turnDisplay">Player 1's Turn</div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button id="endTurnBtn">End Turn</button>
+      <div style="color:#98a0b3;font-weight:700">Click your tile → click adjacent enemy to attack</div>
+    </div>
+  </header>
+
+  <div id="boardPanel">
+    <div id="board" role="grid" aria-label="game board"></div>
+
+    <!-- battle overlay (hidden until an attack) -->
+    <div id="battleOverlay" aria-hidden="true" style="display:none">
+      <div class="diceBox" id="diceBox" role="dialog" aria-modal="true">
+        <div style="display:flex;justify-content:space-between;align-items:center;width:100%">
+          <div style="font-weight:900">Battle</div>
+          <div id="diceClose" style="opacity:.6;font-size:13px">auto-hide</div>
+        </div>
+        <div class="diceTotals">
+          <div class="diceLabel">Attacker (<span id="attCount">0</span>)</div>
+          <div class="diceLabel">Defender (<span id="defCount">0</span>)</div>
+        </div>
+        <div id="attRow" class="diceRow"></div>
+        <div style="height:6px"></div>
+        <div id="defRow" class="diceRow"></div>
+        <div style="height:8px"></div>
+        <div style="width:100%;display:flex;justify-content:space-between;align-items:center">
+          <div style="font-weight:900">Totals</div>
+          <div style="display:flex;gap:12px;align-items:center">
+            <div style="font-size:20px;font-weight:900" id="attTotal">0</div>
+            <div style="opacity:.5">vs</div>
+            <div style="font-size:20px;font-weight:900" id="defTotal">0</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="battleLog" aria-live="polite"></div>
+  </div>
+
+  <div id="info"></div>
+</div>
+
+<script>
+/* ============================
+   Core + Polishes Implementation (transfer UI removed)
+   ============================ */
+
+const params = new URLSearchParams(window.location.search);
+let players = parseInt(params.get('players')) || 2;
+if (Number.isNaN(players)) players = 2;
+players = Math.max(2, Math.min(8, players));
+const gridSizes = {2:6,3:8,4:10,5:12,6:14,7:15,8:16};
+let boardSize = gridSizes[players] || 6;
+if (boardSize * boardSize < players) boardSize = Math.ceil(Math.sqrt(players));
+
+const playerColors = ["#ff7b7b","#7bb8ff","#7bff9b","#ffcf7b","#be7bff","#4dd2d2","#ff88d1","#e6e66a"];
+const playerData = Array.from({length:players}, (_,i)=>({id:i+1,color:playerColors[i],territories:0,totalPieces:0,alive:true}));
+
+// DOM refs
+const boardEl = document.getElementById('board');
+const turnDisplay = document.getElementById('turnDisplay');
+const endTurnBtn = document.getElementById('endTurnBtn');
+const infoEl = document.getElementById('info');
+const battleLogEl = document.getElementById('battleLog');
+const battleOverlay = document.getElementById('battleOverlay');
+const attRow = document.getElementById('attRow');
+const defRow = document.getElementById('defRow');
+const attTotalEl = document.getElementById('attTotal');
+const defTotalEl = document.getElementById('defTotal');
+const attCountEl = document.getElementById('attCount');
+const defCountEl = document.getElementById('defCount');
+
+let diceHideTimer = null;
+
+// build board
+boardEl.style.gridTemplateColumns = `repeat(${boardSize}, 1fr)`;
+boardEl.style.gridTemplateRows = `repeat(${boardSize}, 1fr)`;
+const totalCells = boardSize * boardSize;
+const cells = new Array(totalCells);
+for (let i=0;i<totalCells;i++){
+  const el = document.createElement('div');
+  el.className = 'cell';
+  el.dataset.index = i;
+  boardEl.appendChild(el);
+  cells[i] = { index: i, element: el, owner: null, pieces: 0 };
+}
+
+// utilities
+function shuffle(array){ for(let i=array.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [array[i],array[j]]=[array[j],array[i]];} return array; }
+function randInt(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
+function textColorForHex(hex){ const h=hex.replace('#',''); const r=parseInt(h.substring(0,2),16); const g=parseInt(h.substring(2,4),16); const b=parseInt(h.substring(4,6),16); return ((r*299+g*587+b*114)/1000)>150 ? '#000' : '#fff'; }
+function indexToRC(idx){ return { r: Math.floor(idx/boardSize), c: idx%boardSize }; }
+function isAdjacent(i1,i2){ const a=indexToRC(i1), b=indexToRC(i2); return Math.abs(a.r-b.r)+Math.abs(a.c-b.c)===1; }
+
+// render helpers
+function updateCell(cell){
+  const el = cell.element;
+  if (cell.owner){
+    const color = playerData[cell.owner-1].color;
+    el.style.background = color;
+    el.style.color = textColorForHex(color);
+    el.innerHTML = `<div style="pointer-events:none">${cell.pieces}</div>`;
+    el.title = `Player ${cell.owner} — Pieces: ${cell.pieces}`;
+  } else {
+    el.style.background = '#222';
+    el.style.color = '#fff';
+    el.textContent = '';
+    el.title = 'Neutral';
+  }
+}
+
+// animate numeric tween
+function animateNumber(cellObj, newVal, duration = 500){
+  const el = cellObj.element.querySelector('div') || cellObj.element;
+  const start = cellObj.pieces;
+  const steps = Math.max(6, Math.floor(duration/40));
+  let step = 0;
+  const diff = newVal - start;
+  const t = setInterval(()=>{
+    step++;
+    const val = Math.round(start + diff * (step / steps));
+    el.textContent = val;
+    if (step >= steps){
+      clearInterval(t);
+      el.textContent = newVal;
+    }
+  }, Math.max(8, duration/steps));
+  cellObj.pieces = newVal;
+}
+
+// render player info badges
+function recalcPlayerTotals(){ playerData.forEach(p=>{p.territories=0;p.totalPieces=0}); cells.forEach(c=>{ if (c.owner){ const p=playerData[c.owner-1]; p.territories++; p.totalPieces+=c.pieces; }}); playerData.forEach(p=>p.alive = p.territories>0); }
+function renderPlayerInfo(){ recalcPlayerTotals(); infoEl.innerHTML=''; playerData.forEach(p=>{ const badge=document.createElement('div'); badge.className='player-badge'; badge.innerHTML=`<div class="swatch" style="background:${p.color}"></div><div>P${p.id}</div><div style="opacity:.7">T:${p.territories}</div><div style="opacity:.7">S:${p.totalPieces}</div>`; infoEl.appendChild(badge); }); }
+
+// initial distribution (random round-robin) with random pieces 1..5
+function assignStartingCells(){
+  const indices = shuffle(Array.from({length:totalCells}, (_,i)=>i));
+  for (let i=0;i<indices.length;i++){
+    const idx = indices[i];
+    const pIdx = i % players;
+    const cell = cells[idx];
+    cell.owner = pIdx+1;
+    cell.pieces = randInt(1,5);
+    updateCell(cell);
+  }
+  renderPlayerInfo();
+}
+
+/* ---------------------
+   Reinforcement: instead of +1 each tile,
+   totalIncome = territories, and it's randomly allocated
+   across owned tiles.
+   --------------------- */
+function distributeReinforcementsForPlayer(playerId){
+  const owned = cells.filter(c=>c.owner===playerId);
+  if (owned.length === 0) return;
+  const totalIncome = owned.length;
+  if (totalIncome <= 0) return;
+  const recipients = owned.map(c=>c.index);
+  for (let i=0;i<totalIncome;i++){
+    const pick = recipients[Math.floor(Math.random()*recipients.length)];
+    const cell = cells[pick];
+    const rect = boardEl.getBoundingClientRect();
+    const sx = rect.width/2;
+    const sy = -20;
+    const rectCell = cell.element.getBoundingClientRect();
+    const panelRect = boardEl.getBoundingClientRect();
+    const tx = rectCell.left + rectCell.width/2 - panelRect.left;
+    const ty = rectCell.top + rectCell.height/2 - panelRect.top;
+    const particle = document.createElement('div');
+    particle.className = 'pawnParticle';
+    particle.style.left = `${sx}px`; particle.style.top = `${sy}px`; particle.style.background = playerData[playerId-1].color; particle.style.opacity = '1';
+    boardEl.appendChild(particle);
+    requestAnimationFrame(()=>{ particle.style.left = `${tx}px`; particle.style.top = `${ty}px`; particle.style.transform = 'translate(-50%,-50%) scale(1.05)'; });
+    setTimeout(()=>{ particle.style.opacity='0'; setTimeout(()=>{ particle.remove(); }, 480); }, 600);
+    setTimeout(()=>{ animateNumber(cell, cell.pieces+1, 360); renderPlayerInfo(); }, 420 + Math.random()*120);
+  }
+}
+
+/* ---------------------
+   Dice visuals using Unicode dice faces (⚀ ⚁ ⚂ ⚃ ⚄ ⚅)
+   Sounds: WebAudio-generated
+   --------------------- */
+
+const diceFaces = ['\u2680','\u2681','\u2682','\u2683','\u2684','\u2685'];
+
+function showBattleLog(text, short=true){
+  battleLogEl.textContent = text;
+  battleLogEl.classList.add('show');
+  clearTimeout(battleLogEl._t);
+  battleLogEl._t = setTimeout(()=> battleLogEl.classList.remove('show'), short ? 1200 : 2800);
+}
+
+// WebAudio helpers
+const AudioCtx = (window.AudioContext || window.webkitAudioContext) ? new (window.AudioContext || window.webkitAudioContext)() : null;
+function playTone(freq, dur=0.08, type='sine', gain=0.09){
+  if (!AudioCtx) return;
+  const o = AudioCtx.createOscillator();
+  const g = AudioCtx.createGain();
+  o.type = type;
+  o.frequency.value = freq;
+  g.gain.value = gain;
+  o.connect(g); g.connect(AudioCtx.destination);
+  o.start();
+  g.gain.exponentialRampToValueAtTime(0.0001, AudioCtx.currentTime + dur);
+  setTimeout(()=> o.stop(), dur*1000+20);
+}
+function playDiceRollSound(){
+  playTone(1200,0.05,'square',0.08);
+  setTimeout(()=> playTone(950,0.05,'square',0.07), 60);
+  setTimeout(()=> playTone(700,0.05,'square',0.06), 120);
+}
+function playCaptureSound(){ playTone(520,0.18,'sawtooth',0.14); setTimeout(()=> playTone(860,0.12,'triangle',0.06), 120); }
+function playDefendSound(){ playTone(220,0.14,'sine',0.12); setTimeout(()=> playTone(140,0.08,'sine',0.06), 90); }
+
+// dice UI helpers
+function clearDiceUI(){
+  attRow.innerHTML=''; defRow.innerHTML=''; attTotalEl.textContent='0'; defTotalEl.textContent='0';
+  attCountEl.textContent='0'; defCountEl.textContent='0';
+}
+function showDiceOverlay(attCount, defCount){
+  battleOverlay.style.display='flex';
+  battleOverlay.setAttribute('aria-hidden','false');
+  attCountEl.textContent = attCount;
+  defCountEl.textContent = defCount;
+  clearDiceUI();
+  for(let i=0;i<attCount;i++){ const d = document.createElement('div'); d.className='diceDie'; d.textContent=''; attRow.appendChild(d); }
+  for(let i=0;i<defCount;i++){ const d = document.createElement('div'); d.className='diceDie'; d.textContent=''; defRow.appendChild(d); }
+}
+function hideDiceOverlayAfter(ms=1200){
+  clearTimeout(diceHideTimer);
+  diceHideTimer = setTimeout(()=>{ battleOverlay.style.display='none'; battleOverlay.setAttribute('aria-hidden','true'); clearDiceUI(); }, ms);
+}
+
+function rollDiceArray(n){
+  const out = [];
+  for(let i=0;i<n;i++) out.push(randInt(1,6));
+  return out;
+}
+function sumDice(arr){ return arr.reduce((a,b)=>a+b,0); }
+function animateDiceRollFaces(finalAtt, finalDef, onDone){
+  const attDice = Array.from(attRow.children);
+  const defDice = Array.from(defRow.children);
+  const rollTime = 900;
+  const interval = 60;
+  const rounds = Math.floor(rollTime / interval);
+  let r = 0;
+  playDiceRollSound();
+  const intervalId = setInterval(()=>{
+    r++;
+    attDice.forEach(d => d.textContent = diceFaces[randInt(0,5)]);
+    defDice.forEach(d => d.textContent = diceFaces[randInt(0,5)]);
+    if (r >= rounds){
+      clearInterval(intervalId);
+      attDice.forEach((d,i)=> d.textContent = diceFaces[(finalAtt[i]||1)-1]);
+      defDice.forEach((d,i)=> d.textContent = diceFaces[(finalDef[i]||1)-1]);
+      if (typeof onDone === 'function') onDone();
+    }
+  }, interval);
+}
+
+/* pawn particle animation */
+function animatePawnTransfer(srcEl, tgtEl, color, count=1){
+  const rectSrc = srcEl.getBoundingClientRect();
+  const rectTgt = tgtEl.getBoundingClientRect();
+  const panelRect = boardEl.getBoundingClientRect();
+  const sx = rectSrc.left + rectSrc.width/2 - panelRect.left;
+  const sy = rectSrc.top + rectSrc.height/2 - panelRect.top;
+  const tx = rectTgt.left + rectTgt.width/2 - panelRect.left;
+  const ty = rectTgt.top + rectTgt.height/2 - panelRect.top;
+
+  const spawn = Math.min(6, Math.max(1, count));
+  for (let i=0;i<spawn;i++){
+    const particle = document.createElement('div');
+    particle.className = 'pawnParticle';
+    particle.style.left = `${sx + randInt(-6,6)}px`;
+    particle.style.top = `${sy + randInt(-6,6)}px`;
+    particle.style.background = color;
+    particle.style.opacity = '1';
+    boardEl.appendChild(particle);
+    requestAnimationFrame(()=>{ particle.style.left = `${tx + randInt(-8,8)}px`; particle.style.top = `${ty + randInt(-8,8)}px`; particle.style.transform = 'translate(-50%,-50%) scale(1.15)'; });
+    setTimeout(()=>{ particle.style.opacity='0'; setTimeout(()=> particle.remove(), 460); }, 580 + i*40);
+  }
+}
+
+/* camera shake */
+function shakeBoard(){ boardEl.classList.add('shake'); setTimeout(()=> boardEl.classList.remove('shake'), 450); }
+
+/* ---------------------
+   Attack flow with animation, dice faces, sounds (no transfer)
+   --------------------- */
+let locked = false;
+function performAttackAnimated(srcIdx, tgtIdx){
+  if (locked) return;
+  const src = cells[srcIdx];
+  const tgt = cells[tgtIdx];
+  if (!src || !tgt) return;
+  if (src.owner !== currentPlayer) return;
+  if (!tgt.owner || tgt.owner === currentPlayer) return;
+  if (!isAdjacent(srcIdx, tgtIdx)) return;
+
+  const commit = Math.max(0, src.pieces - 1);
+  if (commit <= 0){ showBattleLog('Cannot attack — must leave 1 behind.'); return; }
+
+  locked = true;
+  showDiceOverlay(commit, tgt.pieces);
+
+  const attDiceArr = rollDiceArray(commit);
+  const defDiceArr = rollDiceArray(tgt.pieces);
+
+  animateDiceRollFaces(attDiceArr, defDiceArr, ()=>{
+    const attSum = sumDice(attDiceArr);
+    const defSum = sumDice(defDiceArr);
+    attTotalEl.textContent = attSum;
+    defTotalEl.textContent = defSum;
+
+    const summary = `P${currentPlayer} (${attSum}) vs P${tgt.owner} (${defSum})`;
+
+    if (attSum > defSum){
+      // attacker captures — commit moves in, no further transfers
+      playCaptureSound();
+      animatePawnTransfer(src.element, tgt.element, playerData[currentPlayer-1].color, Math.min(8, commit));
+      animateNumber(src, Math.max(0, src.pieces - commit), 500);
+      setTimeout(()=>{
+        tgt.owner = currentPlayer;
+        updateCell(tgt);
+        animateNumber(tgt, commit, 600);
+        renderPlayerInfo();
+      }, 220);
+
+      tgt.element.classList.add('flash-capture');
+      setTimeout(()=> tgt.element.classList.remove('flash-capture'), 900);
+      if (commit >= 4 || defSum >= 8) shakeBoard();
+      showBattleLog('Capture! ' + summary);
+
+      // finish after animations: hide overlay, unlock, refresh, no transfer step
+      hideDiceOverlayAfter(1200);
+      setTimeout(()=>{ locked = false; if (!(src.owner === currentPlayer && src.pieces > 1)) clearSelection(); renderPlayerInfo(); checkPlayerElimination(); checkWinCondition(); }, 1200);
+
+    } else {
+      // defender holds
+      playDefendSound();
+      animateNumber(src, Math.max(0, src.pieces - commit), 500);
+      src.element.classList.add('flash-defend');
+      setTimeout(()=> src.element.classList.remove('flash-defend'), 700);
+      showBattleLog('Defended. ' + summary);
+      hideDiceOverlayAfter(1200);
+      setTimeout(()=>{ locked = false; if (!(src.owner === currentPlayer && src.pieces > 1)) clearSelection(); renderPlayerInfo(); checkPlayerElimination(); checkWinCondition(); }, 1200);
+    }
+  });
+}
+
+/* ---------------------
+   Attack flow state & UI interactions
+   --------------------- */
+let currentPlayer = 1;
+function updateTurnDisplay(){ turnDisplay.textContent = `Player ${currentPlayer}'s Turn`; }
+function nextAlivePlayer(from){
+  for (let step=1; step<=players; step++){
+    const cand = ((from-1+step) % players) + 1;
+    if (playerData[cand-1].alive) return cand;
+  }
+  return null;
+}
+endTurnBtn.addEventListener('click', ()=>{
+  if (locked) return;
+  distributeReinforcementsForPlayer(currentPlayer);
+  const nxt = nextAlivePlayer(currentPlayer);
+  if (nxt !== null && nxt !== currentPlayer) currentPlayer = nxt;
+  updateTurnDisplay();
+  setTimeout(()=>{ renderPlayerInfo(); checkWinCondition(); }, 420);
+});
+
+function clearSelection(){ if (selectedCell !== null) cells[selectedCell].element.classList.remove('selected'); selectedCell=null; }
+let selectedCell = null;
+
+boardEl.addEventListener('click', (ev)=>{
+  if (locked) return;
+  const el = ev.target.closest('.cell'); if (!el) return;
+  const idx = Number(el.dataset.index); const c = cells[idx];
+
+  if (selectedCell === null){
+    if (c.owner === currentPlayer){
+      selectedCell = idx; c.element.classList.add('selected');
+    }
+    return;
+  }
+
+  if (selectedCell === idx){
+    clearSelection(); return;
+  }
+
+  if (c.owner === currentPlayer){
+    cells[selectedCell].element.classList.remove('selected');
+    selectedCell = idx; cells[selectedCell].element.classList.add('selected');
+    return;
+  }
+
+  if (c.owner && c.owner !== currentPlayer){
+    if (!isAdjacent(selectedCell, idx)){
+      el.animate([{transform:'translateY(0)'},{transform:'translateY(-6px)'},{transform:'translateY(0)'}],{duration:160});
+      return;
+    }
+    performAttackAnimated(selectedCell, idx);
+  }
+});
+
+/* ---------------------
+   Player elimination & win checks
+   --------------------- */
+function checkPlayerElimination(){ recalcPlayerTotals(); }
+function checkWinCondition(){
+  recalcPlayerTotals();
+  const alivePlayers = playerData.filter(p=>p.alive);
+  if (alivePlayers.length === 1){
+    const winner = alivePlayers[0];
+    setTimeout(()=> alert(`Player ${winner.id} wins!`), 40);
+  }
+}
+
+/* ---------------------
+   Initialize game
+   --------------------- */
+assignStartingCells();
+updateTurnDisplay();
+
+/* minor niceties */
+document.addEventListener('click', (ev)=>{
+  if (!ev.target.closest('.cell') && !ev.target.closest('#controls')){
+    clearSelection();
+  }
+});
+boardEl.addEventListener('dblclick', (ev)=>{ const el = ev.target.closest('.cell'); if (!el) return; const idx = Number(el.dataset.index); console.log(cells[idx]); });
+</script>
+</body>
+</html>
