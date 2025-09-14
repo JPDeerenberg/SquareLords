@@ -3,30 +3,31 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Battleboard — No Transfers</title>
+<title>Battleboard — Dice & UI Tweaks</title>
 <style>
-  :root{
-    --bg:#0f0f12; --panel:#1d1d22; --gap:6px; --accent:#ffb86b;
-  }
+  :root{ --bg:#0f0f12; --panel:#1d1d22; --gap:6px; --accent:#ffb86b; }
   html,body{height:100%;margin:0;background:var(--bg);color:#e6eef6;font-family:Inter,Segoe UI,Arial,sans-serif}
-  .wrap{max-width:1100px;margin:18px auto;padding:12px;display:flex;flex-direction:column;align-items:center;gap:12px}
+  .wrap{max-width:1200px;margin:12px auto;padding:12px;display:flex;flex-direction:column;align-items:center;gap:12px}
   header{width:100%;display:flex;justify-content:space-between;align-items:center;gap:12px}
-  #turnDisplay {
-  font-weight: 900;
-  font-size: 2.1rem;
-  transition: color 0.2s;
-}
+  #turnDisplay { font-weight: 900; font-size: 2.1rem; transition: color 0.2s; }
   button{background:#2fb871;border:none;color:#fff;padding:8px 12px;border-radius:8px;cursor:pointer}
   button:disabled{opacity:.5;cursor:default}
+
+  /* board panel: keep board sized to viewport so it never forces page scroll on large screens */
   #boardPanel{background:var(--panel);padding:12px;border-radius:10px;width:100%;display:flex;justify-content:center;position:relative;overflow:hidden}
-  #board{width:min(90vmin,800px);aspect-ratio:1/1;display:grid;gap:var(--gap);width:100%;height:100%}
-  .cell{display:flex;align-items:center;justify-content:center;font-weight:800;user-select:none;border-radius:8px;box-shadow:0 2px 0 rgba(0,0,0,.4) inset;cursor:pointer;transition:transform .08s,box-shadow .08s,outline-color .12s;position:relative}
+  /* width capped by vmin and viewport height; also a strict max so huge monitors don't explode layout */
+  #board{width:min(78vmin, 88vh, 900px); max-height:calc(100vh - 200px); aspect-ratio:1/1; display:grid; gap:var(--gap); height:auto}
+
+  .cell{display:flex;align-items:center;justify-content:center;font-weight:800;user-select:none;border-radius:8px;box-shadow:0 2px 0 rgba(0,0,0,.4) inset;cursor:pointer;transition:transform .08s,box-shadow .08s,outline-color .12s;position:relative;padding:6px}
   .cell:hover{transform:translateY(-3px)}
   .cell.selected{outline:3px solid rgba(255,255,255,.08);box-shadow:0 8px 20px rgba(0,0,0,.6)}
   .flash-capture{animation:flashCapture .9s ease}
   .flash-defend{animation:flashDefend .7s ease}
   @keyframes flashCapture{0%{transform:scale(1.02);box-shadow:0 8px 30px rgba(0,0,0,.6)}50%{transform:scale(1.05)}100%{transform:scale(1.01)}}
   @keyframes flashDefend{0%{transform:translateY(0)}50%{transform:translateY(-6px) rotate(-2deg)}100%{transform:translateY(0)}}
+
+  /* cell counter sizing: responsive but never tiny */
+  .cnt{font-weight:900;font-size:clamp(12px, 2.6vmin, 28px);pointer-events:none}
 
   /* info / badges */
   #info{width:100%;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
@@ -35,12 +36,19 @@
 
   /* battle overlay */
   #battleOverlay{position:absolute;left:0;right:0;top:0;bottom:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:50}
-  .diceBox{pointer-events:auto;background:rgba(10,10,12,.95);border:1px solid rgba(255,255,255,.06);padding:14px;border-radius:12px;color:#fff;min-width:360px;display:flex;flex-direction:column;gap:10px;align-items:center;backdrop-filter:blur(4px)}
-  .diceRow{display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap}
-  .diceDie{width:46px;height:46px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:22px;background:rgba(255,255,255,.06)}
-  .diceLabel{font-size:13px;opacity:.85}
+  .diceBox{pointer-events:auto;background:rgba(8,8,10,.98);border:1px solid rgba(255,255,255,.06);padding:18px;border-radius:12px;color:#fff;min-width:460px;display:flex;flex-direction:column;gap:12px;align-items:center;backdrop-filter:blur(4px)}
+  .diceRow{display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap}
+
+  /* white dice for contrast; bigger for readability */
+  .diceDie{width:92px;height:92px;border-radius:12px;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);gap:6px;padding:8px;box-shadow:0 10px 28px rgba(0,0,0,.55);background:#fff;border:1px solid rgba(0,0,0,.08);color:#000}
+  .pip{width:18px;height:18px;border-radius:50%;background:#111;box-shadow:0 2px 0 rgba(255,255,255,.06) inset;justify-self:center;align-self:center}
+  .diceLabel{font-size:13px;opacity:.95}
   .diceTotals{display:flex;gap:18px;align-items:center;width:100%;justify-content:space-between;font-weight:800}
   .diceBtn{background:var(--accent);border:none;padding:8px 10px;border-radius:8px;font-weight:800;cursor:pointer}
+
+  /* close button in top-right of dice box */
+  .closeBtn{position:absolute;right:12px;top:10px;background:transparent;border:none;color:rgba(255,255,255,.7);font-size:18px;cursor:pointer;padding:4px;border-radius:6px}
+  .closeBtn:hover{background:rgba(255,255,255,.03)}
 
   /* particle pawn */
   .pawnParticle{position:absolute;width:14px;height:14px;border-radius:50%;box-shadow:0 1px 0 rgba(0,0,0,.6);transform:translate(-50%,-50%) scale(1);transition:transform .6s ease,left .6s ease,top .6s ease,opacity .4s;z-index:60}
@@ -52,6 +60,8 @@
   /* camera shake */
   .shake{animation:shakeAnim .45s cubic-bezier(.12,.9,.3,1)}
   @keyframes shakeAnim{0%{transform:translate(0,0)}25%{transform:translate(-6px,2px)}50%{transform:translate(3px,-6px)}75%{transform:translate(-2px,4px)}100%{transform:translate(0,0)}}
+
+  @media (max-width:560px){ .diceDie{width:64px;height:64px} .diceBox{min-width:320px} .pip{width:12px;height:12px} }
 </style>
 </head>
 <body>
@@ -63,8 +73,8 @@
       <div style="color:#98a0b3;font-weight:700">Click your tile → click adjacent enemy to attack</div>
     </div>
     <div>
-      <button onclick="saveGameState()">Save</button>
-      <button onclick="loadGameState()">Load</button>
+      <button id="saveBtn">Save</button>
+      <button id="loadBtn">Load</button>
     </div>
   </header>
 
@@ -74,18 +84,19 @@
     <!-- battle overlay (hidden until an attack) -->
     <div id="battleOverlay" aria-hidden="true" style="display:none">
       <div class="diceBox" id="diceBox" role="dialog" aria-modal="true">
+        <button class="closeBtn" id="diceClose" title="Close">✕</button>
         <div style="display:flex;justify-content:space-between;align-items:center;width:100%">
           <div style="font-weight:900">Battle</div>
-          <div id="diceClose" style="opacity:.6;font-size:13px">auto-hide</div>
+          <div style="opacity:.6;font-size:13px">Results will auto-hide after a short delay</div>
         </div>
         <div class="diceTotals">
           <div class="diceLabel">Attacker (<span id="attCount">0</span>)</div>
           <div class="diceLabel">Defender (<span id="defCount">0</span>)</div>
         </div>
         <div id="attRow" class="diceRow"></div>
-        <div style="height:6px"></div>
-        <div id="defRow" class="diceRow"></div>
         <div style="height:8px"></div>
+        <div id="defRow" class="diceRow"></div>
+        <div style="height:10px"></div>
         <div style="width:100%;display:flex;justify-content:space-between;align-items:center">
           <div style="font-weight:900">Totals</div>
           <div style="display:flex;gap:12px;align-items:center">
@@ -104,9 +115,12 @@
 </div>
 
 <script>
-/* ============================
-   Core + Polishes Implementation (transfer UI removed)
-   ============================ */
+/* UI tweaks
+   - Close button added for the battle popup
+   - Dice face changed to white with dark pips for contrast
+   - Board sized to viewport to avoid page scroll on large screens
+   - Cell counters use responsive clamp to avoid extremely small numbers
+*/
 
 const params = new URLSearchParams(window.location.search);
 let players = parseInt(params.get('players')) || 2;
@@ -132,6 +146,9 @@ const attTotalEl = document.getElementById('attTotal');
 const defTotalEl = document.getElementById('defTotal');
 const attCountEl = document.getElementById('attCount');
 const defCountEl = document.getElementById('defCount');
+const saveBtn = document.getElementById('saveBtn');
+const loadBtn = document.getElementById('loadBtn');
+const diceCloseBtn = document.getElementById('diceClose');
 
 let diceHideTimer = null;
 
@@ -162,19 +179,22 @@ function updateCell(cell){
     const color = playerData[cell.owner-1].color;
     el.style.background = color;
     el.style.color = textColorForHex(color);
-    el.innerHTML = `<div style="pointer-events:none">${cell.pieces}</div>`;
+    let counter = el.querySelector('.cnt');
+    if (!counter){ counter = document.createElement('div'); counter.className = 'cnt'; counter.style.pointerEvents='none'; el.innerHTML = ''; el.appendChild(counter); }
+    counter.textContent = cell.pieces;
     el.title = `Player ${cell.owner} — Pieces: ${cell.pieces}`;
   } else {
     el.style.background = '#222';
     el.style.color = '#fff';
-    el.textContent = '';
+    el.innerHTML = '';
     el.title = 'Neutral';
   }
 }
 
 // animate numeric tween
 function animateNumber(cellObj, newVal, duration = 500){
-  const el = cellObj.element.querySelector('div') || cellObj.element;
+  if (!cellObj || !cellObj.element) return;
+  const el = cellObj.element.querySelector('.cnt') || cellObj.element;
   const start = cellObj.pieces;
   const steps = Math.max(6, Math.floor(duration/40));
   let step = 0;
@@ -192,7 +212,7 @@ function animateNumber(cellObj, newVal, duration = 500){
 }
 
 // render player info badges
-function recalcPlayerTotals(){ playerData.forEach(p=>{p.territories=0;p.totalPieces=0}); cells.forEach(c=>{ if (c.owner){ const p=playerData[c.owner-1]; p.territories++; p.totalPieces+=c.pieces; }}); playerData.forEach(p=>p.alive = p.territories>0); }
+function recalcPlayerTotals(){ playerData.forEach(p=>{p.territories=0;p.totalPieces=0}); cells.forEach(c=>{ if (c.owner){ const p=playerData[c.owner-1]; if (p){ p.territories++; p.totalPieces+=c.pieces; } }}); playerData.forEach(p=>p.alive = p.territories>0); }
 function renderPlayerInfo(){ recalcPlayerTotals(); infoEl.innerHTML=''; playerData.forEach(p=>{ const badge=document.createElement('div'); badge.className='player-badge'; badge.innerHTML=`<div class="swatch" style="background:${p.color}"></div><div>P${p.id}</div><div style="opacity:.7">T:${p.territories}</div><div style="opacity:.7">S:${p.totalPieces}</div>`; infoEl.appendChild(badge); }); }
 
 // initial distribution (random round-robin) with random pieces 1..5
@@ -209,37 +229,24 @@ function assignStartingCells(){
   renderPlayerInfo();
 }
 
-/* ---------------------
-   Reinforcement: instead of +1 each tile,
-   totalIncome = territories, and it's randomly allocated
-   across owned tiles.
-   --------------------- */
+/* Reinforcement distribution */
 const MAX_PAWNS_PER_CELL = 20;
-
 function distributeReinforcementsForPlayer(playerId){
   const owned = cells.filter(c=>c.owner===playerId);
   if (owned.length === 0) return;
   const totalIncome = owned.length;
   if (totalIncome <= 0) return;
 
-  // Only select cells that are not full
   let recipients = owned.filter(c => c.pieces < MAX_PAWNS_PER_CELL).map(c=>c.index);
 
   for (let i=0;i<totalIncome;i++){
-    // If all cells are full, stop distributing
     if (recipients.length === 0) break;
-
     const pick = recipients[Math.floor(Math.random()*recipients.length)];
     const cell = cells[pick];
+    if (!cell) { recipients = recipients.filter(idx => idx !== pick); continue; }
+    if (cell.pieces >= MAX_PAWNS_PER_CELL) { recipients = recipients.filter(idx => idx !== pick); continue; }
 
-    // If cell is full, skip
-    if (cell.pieces >= MAX_PAWNS_PER_CELL) {
-      // Remove from recipients for future picks
-      recipients = recipients.filter(idx => idx !== pick);
-      continue;
-    }
-
-    // Animate and add pawn
+    // particle spawn
     const rect = boardEl.getBoundingClientRect();
     const sx = rect.width/2;
     const sy = -20;
@@ -255,12 +262,10 @@ function distributeReinforcementsForPlayer(playerId){
     setTimeout(()=>{ particle.style.opacity='0'; setTimeout(()=>{ particle.remove(); }, 480); }, 600);
 
     setTimeout(()=>{
-      // Only add pawn if not at max
       if (cell.pieces < MAX_PAWNS_PER_CELL) {
         animateNumber(cell, Math.min(MAX_PAWNS_PER_CELL, cell.pieces+1), 360);
         renderPlayerInfo();
-        // If cell reached max, remove from recipients
-        if (cell.pieces+1 >= MAX_PAWNS_PER_CELL) {
+        if (cell.pieces >= MAX_PAWNS_PER_CELL) {
           recipients = recipients.filter(idx => idx !== pick);
         }
       }
@@ -268,89 +273,82 @@ function distributeReinforcementsForPlayer(playerId){
   }
 }
 
-/* ---------------------
-   Dice visuals using Unicode dice faces (⚀ ⚁ ⚂ ⚃ ⚄ ⚅)
-   Sounds: WebAudio-generated
-   --------------------- */
+/* Audio helpers (unchanged) */
+const AudioCtx = (window.AudioContext || window.webkitAudioContext) ? new (window.AudioContext || window.webkitAudioContext)() : null;
+function playTone(freq, dur=0.08, type='sine', gain=0.09){ if (!AudioCtx) return; const o = AudioCtx.createOscillator(); const g = AudioCtx.createGain(); o.type = type; o.frequency.value = freq; g.gain.value = gain; o.connect(g); g.connect(AudioCtx.destination); o.start(); g.gain.exponentialRampToValueAtTime(0.0001, AudioCtx.currentTime + dur); setTimeout(()=> o.stop(), dur*1000+20); }
+function playDiceRollSound(){ playTone(1200,0.05,'square',0.08); setTimeout(()=> playTone(950,0.05,'square',0.07), 60); setTimeout(()=> playTone(700,0.05,'square',0.06), 120); }
+function playCaptureSound(){ playTone(520,0.18,'sawtooth',0.14); setTimeout(()=> playTone(860,0.12,'triangle',0.06), 120); }
+function playDefendSound(){ playTone(220,0.14,'sine',0.12); setTimeout(()=> playTone(140,0.08,'sine',0.06), 90); }
 
-const diceFaces = ['\u2680','\u2681','\u2682','\u2683','\u2684','\u2685'];
+// dice rendering as pips (white dice, dark pips)
+const diePipsMap = {
+  1: [4],
+  2: [0,8],
+  3: [0,4,8],
+  4: [0,2,6,8],
+  5: [0,2,4,6,8],
+  6: [0,2,3,5,6,8]
+};
+function renderDieFace(dieEl, value){
+  dieEl.innerHTML = '';
+  for (let i=0;i<9;i++){
+    const slot = document.createElement('div');
+    slot.style.width = '100%'; slot.style.height = '100%';
+    slot.style.display = 'flex'; slot.style.alignItems='center'; slot.style.justifyContent='center';
+    if (diePipsMap[value] && diePipsMap[value].includes(i)){
+      const pip = document.createElement('div');
+      pip.className = 'pip';
+      slot.appendChild(pip);
+    }
+    dieEl.appendChild(slot);
+  }
+}
 
 function showBattleLog(text, short=true){
   battleLogEl.textContent = text;
   battleLogEl.classList.add('show');
   clearTimeout(battleLogEl._t);
-  battleLogEl._t = setTimeout(()=> battleLogEl.classList.remove('show'), short ? 1200 : 2800);
+  battleLogEl._t = setTimeout(()=> battleLogEl.classList.remove('show'), short ? 1400 : 3200);
 }
 
-// WebAudio helpers
-const AudioCtx = (window.AudioContext || window.webkitAudioContext) ? new (window.AudioContext || window.webkitAudioContext)() : null;
-function playTone(freq, dur=0.08, type='sine', gain=0.09){
-  if (!AudioCtx) return;
-  const o = AudioCtx.createOscillator();
-  const g = AudioCtx.createGain();
-  o.type = type;
-  o.frequency.value = freq;
-  g.gain.value = gain;
-  o.connect(g); g.connect(AudioCtx.destination);
-  o.start();
-  g.gain.exponentialRampToValueAtTime(0.0001, AudioCtx.currentTime + dur);
-  setTimeout(()=> o.stop(), dur*1000+20);
-}
-function playDiceRollSound(){
-  playTone(1200,0.05,'square',0.08);
-  setTimeout(()=> playTone(950,0.05,'square',0.07), 60);
-  setTimeout(()=> playTone(700,0.05,'square',0.06), 120);
-}
-function playCaptureSound(){ playTone(520,0.18,'sawtooth',0.14); setTimeout(()=> playTone(860,0.12,'triangle',0.06), 120); }
-function playDefendSound(){ playTone(220,0.14,'sine',0.12); setTimeout(()=> playTone(140,0.08,'sine',0.06), 90); }
-
-// dice UI helpers
-function clearDiceUI(){
-  attRow.innerHTML=''; defRow.innerHTML=''; attTotalEl.textContent='0'; defTotalEl.textContent='0';
-  attCountEl.textContent='0'; defCountEl.textContent='0';
-}
+function clearDiceUI(){ attRow.innerHTML=''; defRow.innerHTML=''; attTotalEl.textContent='0'; defTotalEl.textContent='0'; attCountEl.textContent='0'; defCountEl.textContent='0'; }
 function showDiceOverlay(attCount, defCount){
   battleOverlay.style.display='flex';
   battleOverlay.setAttribute('aria-hidden','false');
   attCountEl.textContent = attCount;
   defCountEl.textContent = defCount;
   clearDiceUI();
-  for(let i=0;i<attCount;i++){ const d = document.createElement('div'); d.className='diceDie'; d.textContent=''; attRow.appendChild(d); }
-  for(let i=0;i<defCount;i++){ const d = document.createElement('div'); d.className='diceDie'; d.textContent=''; defRow.appendChild(d); }
+  for(let i=0;i<attCount;i++){ const d = document.createElement('div'); d.className='diceDie'; attRow.appendChild(d); }
+  for(let i=0;i<defCount;i++){ const d = document.createElement('div'); d.className='diceDie'; defRow.appendChild(d); }
 }
-function hideDiceOverlayAfter(ms=5500){
-  clearTimeout(diceHideTimer);
-  diceHideTimer = setTimeout(()=>{ battleOverlay.style.display='none'; battleOverlay.setAttribute('aria-hidden','true'); clearDiceUI(); }, ms);
-}
+function hideDiceOverlayAfter(ms=7000){ clearTimeout(diceHideTimer); diceHideTimer = setTimeout(()=>{ battleOverlay.style.display='none'; battleOverlay.setAttribute('aria-hidden','true'); clearDiceUI(); }, ms); }
+function hideDiceOverlayNow(){ clearTimeout(diceHideTimer); battleOverlay.style.display='none'; battleOverlay.setAttribute('aria-hidden','true'); clearDiceUI(); }
 
-function rollDiceArray(n){
-  const out = [];
-  for(let i=0;i<n;i++) out.push(randInt(1,6));
-  return out;
-}
+function rollDiceArray(n){ const out = []; for(let i=0;i<n;i++) out.push(randInt(1,6)); return out; }
 function sumDice(arr){ return arr.reduce((a,b)=>a+b,0); }
+
 function animateDiceRollFaces(finalAtt, finalDef, onDone){
   const attDice = Array.from(attRow.children);
   const defDice = Array.from(defRow.children);
-  const rollTime = 900;
-  const interval = 60;
+  const rollTime = 1100;
+  const interval = 80;
   const rounds = Math.floor(rollTime / interval);
   let r = 0;
   playDiceRollSound();
   const intervalId = setInterval(()=>{
     r++;
-    attDice.forEach(d => d.textContent = diceFaces[randInt(0,5)]);
-    defDice.forEach(d => d.textContent = diceFaces[randInt(0,5)]);
+    attDice.forEach(d => renderDieFace(d, randInt(1,6)));
+    defDice.forEach(d => renderDieFace(d, randInt(1,6)));
     if (r >= rounds){
       clearInterval(intervalId);
-      attDice.forEach((d,i)=> d.textContent = diceFaces[(finalAtt[i]||1)-1]);
-      defDice.forEach((d,i)=> d.textContent = diceFaces[(finalDef[i]||1)-1]);
+      attDice.forEach((d,i)=> renderDieFace(d, (finalAtt[i]||1)));
+      defDice.forEach((d,i)=> renderDieFace(d, (finalDef[i]||1)));
       if (typeof onDone === 'function') onDone();
     }
   }, interval);
 }
 
-/* pawn particle animation */
+/* pawn animation */
 function animatePawnTransfer(srcEl, tgtEl, color, count=1){
   const rectSrc = srcEl.getBoundingClientRect();
   const rectTgt = tgtEl.getBoundingClientRect();
@@ -374,12 +372,9 @@ function animatePawnTransfer(srcEl, tgtEl, color, count=1){
   }
 }
 
-/* camera shake */
 function shakeBoard(){ boardEl.classList.add('shake'); setTimeout(()=> boardEl.classList.remove('shake'), 450); }
 
-/* ---------------------
-   Attack flow with animation, dice faces, sounds (no transfer)
-   --------------------- */
+/* Attack flow */
 let locked = false;
 function performAttackAnimated(srcIdx, tgtIdx){
   if (locked) return;
@@ -390,14 +385,19 @@ function performAttackAnimated(srcIdx, tgtIdx){
   if (!tgt.owner || tgt.owner === currentPlayer) return;
   if (!isAdjacent(srcIdx, tgtIdx)) return;
 
-  const commit = Math.max(0, src.pieces - 1);
-  if (commit <= 0){ showBattleLog('Cannot attack — must leave 1 behind.'); return; }
+  const commitRaw = Math.max(0, src.pieces - 1);
+  if (commitRaw <= 0){ showBattleLog('Cannot attack — must leave 1 behind.'); return; }
+
+  const ATTACKER_DICE_CAP = 6;
+  const DEFENDER_DICE_CAP = 6;
+  const commit = Math.min(commitRaw, ATTACKER_DICE_CAP);
+  const defDiceCount = Math.min(tgt.pieces, DEFENDER_DICE_CAP);
 
   locked = true;
-  showDiceOverlay(commit, tgt.pieces);
+  showDiceOverlay(commit, defDiceCount);
 
   const attDiceArr = rollDiceArray(commit);
-  const defDiceArr = rollDiceArray(tgt.pieces);
+  const defDiceArr = rollDiceArray(defDiceCount);
 
   animateDiceRollFaces(attDiceArr, defDiceArr, ()=>{
     const attSum = sumDice(attDiceArr);
@@ -408,174 +408,75 @@ function performAttackAnimated(srcIdx, tgtIdx){
     const summary = `P${currentPlayer} (${attSum}) vs P${tgt.owner} (${defSum})`;
 
     if (attSum > defSum){
-      // attacker captures — commit moves in, no further transfers
       playCaptureSound();
-      animatePawnTransfer(src.element, tgt.element, playerData[currentPlayer-1].color, Math.min(8, commit));
-      animateNumber(src, Math.max(0, src.pieces - commit), 500);
+      animatePawnTransfer(src.element, tgt.element, playerData[currentPlayer-1].color, Math.min(8, commitRaw));
+      const newSrcPieces = Math.max(1, src.pieces - commitRaw);
+      animateNumber(src, newSrcPieces, 500);
+
       setTimeout(()=>{
         tgt.owner = currentPlayer;
         updateCell(tgt);
-        animateNumber(tgt, commit, 600);
+        const moveIn = Math.min(commitRaw, Math.max(1, commitRaw));
+        animateNumber(tgt, moveIn, 600);
         renderPlayerInfo();
       }, 220);
 
       tgt.element.classList.add('flash-capture');
       setTimeout(()=> tgt.element.classList.remove('flash-capture'), 900);
-      if (commit >= 4 || defSum >= 8) shakeBoard();
+      if (commitRaw >= 4 || defSum >= 8) shakeBoard();
       showBattleLog('Capture! ' + summary);
 
-      // finish after animations: hide overlay, unlock, refresh, no transfer step
-      hideDiceOverlayAfter(1200);
-      setTimeout(()=>{ locked = false; if (!(src.owner === currentPlayer && src.pieces > 1)) clearSelection(); renderPlayerInfo(); checkPlayerElimination(); checkWinCondition(); }, 1200);
+      hideDiceOverlayAfter(7000);
+      setTimeout(()=>{ locked = false; if (!(src.owner === currentPlayer && src.pieces > 1)) clearSelection(); renderPlayerInfo(); checkPlayerElimination(); checkWinCondition(); }, 7000);
 
     } else {
-      // defender holds
       playDefendSound();
-      animateNumber(src, Math.max(0, src.pieces - commit), 500);
+      const newSrcPieces = Math.max(1, src.pieces - commitRaw);
+      animateNumber(src, newSrcPieces, 500);
       src.element.classList.add('flash-defend');
       setTimeout(()=> src.element.classList.remove('flash-defend'), 700);
       showBattleLog('Defended. ' + summary);
-      hideDiceOverlayAfter(1200);
-      setTimeout(()=>{ locked = false; if (!(src.owner === currentPlayer && src.pieces > 1)) clearSelection(); renderPlayerInfo(); checkPlayerElimination(); checkWinCondition(); }, 1200);
+      hideDiceOverlayAfter(7000);
+      setTimeout(()=>{ locked = false; if (!(src.owner === currentPlayer && src.pieces > 1)) clearSelection(); renderPlayerInfo(); checkPlayerElimination(); checkWinCondition(); }, 7000);
     }
   });
 }
 
-/* ---------------------
-   Attack flow state & UI interactions
-   --------------------- */
+/* Turn state & UI interactions */
 let currentPlayer = 1;
-function updateTurnDisplay() {
-  turnDisplay.textContent = `Player ${currentPlayer}'s Turn`;
-  turnDisplay.style.color = playerData[currentPlayer - 1].color;
-}
-function nextAlivePlayer(from){
-  for (let step=1; step<=players; step++){
-    const cand = ((from-1+step) % players) + 1;
-    if (playerData[cand-1].alive) return cand;
-  }
-  return null;
-}
-let endTurnCooldown = 0;
-function startEndTurnCooldown(seconds = 5) {
-  endTurnBtn.disabled = true;
-  endTurnCooldown = seconds;
-  endTurnBtn.textContent = `End Turn (${endTurnCooldown})`;
-  const timer = setInterval(() => {
-    endTurnCooldown--;
-    if (endTurnCooldown > 0) {
-      endTurnBtn.textContent = `End Turn (${endTurnCooldown})`;
-    } else {
-      clearInterval(timer);
-      endTurnBtn.disabled = false;
-      endTurnBtn.textContent = "End Turn";
-    }
-  }, 1000);
-}
+function updateTurnDisplay() { turnDisplay.textContent = `Player ${currentPlayer}'s Turn`; turnDisplay.style.color = playerData[currentPlayer - 1].color; }
+function nextAlivePlayer(from){ for (let step=1; step<=players; step++){ const cand = ((from-1+step) % players) + 1; if (playerData[cand-1].alive) return cand; } return null; }
+let endTurnCooldown = 0; let endTurnTimer = null;
+function startEndTurnCooldown(seconds = 5) { endTurnBtn.disabled = true; endTurnCooldown = seconds; endTurnBtn.textContent = `End Turn (${endTurnCooldown})`; clearInterval(endTurnTimer); endTurnTimer = setInterval(() => { endTurnCooldown--; if (endTurnCooldown > 0) { endTurnBtn.textContent = `End Turn (${endTurnCooldown})`; } else { clearInterval(endTurnTimer); endTurnBtn.disabled = false; endTurnBtn.textContent = "End Turn"; } }, 1000); }
 
-endTurnBtn.addEventListener('click', ()=>{
-  if (locked || endTurnBtn.disabled) return;
-  distributeReinforcementsForPlayer(currentPlayer);
-  const nxt = nextAlivePlayer(currentPlayer);
-  if (nxt !== null && nxt !== currentPlayer) currentPlayer = nxt;
-  updateTurnDisplay();
-  setTimeout(()=>{ renderPlayerInfo(); checkWinCondition(); }, 420);
-  startEndTurnCooldown(5); // Start cooldown after turn ends
-});
+endTurnBtn.addEventListener('click', ()=>{ if (locked || endTurnBtn.disabled) return; distributeReinforcementsForPlayer(currentPlayer); const nxt = nextAlivePlayer(currentPlayer); if (nxt !== null && nxt !== currentPlayer) currentPlayer = nxt; updateTurnDisplay(); setTimeout(()=>{ renderPlayerInfo(); checkWinCondition(); }, 420); startEndTurnCooldown(5); });
 
-function clearSelection(){ if (selectedCell !== null) cells[selectedCell].element.classList.remove('selected'); selectedCell=null; }
+function clearSelection(){ if (typeof selectedCell !== 'undefined' && selectedCell !== null) cells[selectedCell].element.classList.remove('selected'); selectedCell=null; }
 let selectedCell = null;
 
-boardEl.addEventListener('click', (ev)=>{
-  if (locked) return;
-  const el = ev.target.closest('.cell'); if (!el) return;
-  const idx = Number(el.dataset.index); const c = cells[idx];
+boardEl.addEventListener('click', (ev)=>{ if (locked) return; const el = ev.target.closest('.cell'); if (!el) return; const idx = Number(el.dataset.index); const c = cells[idx]; if (selectedCell === null){ if (c.owner === currentPlayer){ selectedCell = idx; c.element.classList.add('selected'); } return; } if (selectedCell === idx){ clearSelection(); return; } if (c.owner === currentPlayer){ cells[selectedCell].element.classList.remove('selected'); selectedCell = idx; cells[selectedCell].element.classList.add('selected'); return; } if (c.owner && c.owner !== currentPlayer){ if (!isAdjacent(selectedCell, idx)){ el.animate([{transform:'translateY(0)'},{transform:'translateY(-6px)'},{transform:'translateY(0)'}],{duration:160}); return; } performAttackAnimated(selectedCell, idx); } });
 
-  if (selectedCell === null){
-    if (c.owner === currentPlayer){
-      selectedCell = idx; c.element.classList.add('selected');
-    }
-    return;
-  }
+/* Improve outside click clearing */
+document.addEventListener('click', (ev)=>{ if (!ev.target.closest('.cell') && !ev.target.closest('button') && !ev.target.closest('#diceBox')){ clearSelection(); } });
+boardEl.addEventListener('dblclick', (ev)=>{ const el = ev.target.closest('.cell'); if (!el) return; const idx = Number(el.dataset.index); console.log(cells[idx]); });
 
-  if (selectedCell === idx){
-    clearSelection(); return;
-  }
+/* Close button handler: hide overlay immediately (UI only) */
+diceCloseBtn.addEventListener('click', ()=>{ hideDiceOverlayNow(); });
 
-  if (c.owner === currentPlayer){
-    cells[selectedCell].element.classList.remove('selected');
-    selectedCell = idx; cells[selectedCell].element.classList.add('selected');
-    return;
-  }
-
-  if (c.owner && c.owner !== currentPlayer){
-    if (!isAdjacent(selectedCell, idx)){
-      el.animate([{transform:'translateY(0)'},{transform:'translateY(-6px)'},{transform:'translateY(0)'}],{duration:160});
-      return;
-    }
-    performAttackAnimated(selectedCell, idx);
-  }
-});
-
-/* ---------------------
-   Player elimination & win checks
-   --------------------- */
+/* Player elimination & win checks */
 function checkPlayerElimination(){ recalcPlayerTotals(); }
-function checkWinCondition(){
-  recalcPlayerTotals();
-  const alivePlayers = playerData.filter(p=>p.alive);
-  if (alivePlayers.length === 1){
-    const winner = alivePlayers[0];
-    setTimeout(()=> alert(`Player ${winner.id} wins!`), 40);
-  }
-}
+function checkWinCondition(){ recalcPlayerTotals(); const alivePlayers = playerData.filter(p=>p.alive); if (alivePlayers.length === 1){ const winner = alivePlayers[0]; setTimeout(()=> alert(`Player ${winner.id} wins!`), 40); } }
 
-/* ---------------------
-   Initialize game
-   --------------------- */
+/* Save / Load */
+function saveGameState() { const state = { currentPlayer, cells: cells.map(c => ({ owner: c.owner, pieces: c.pieces })), playerData: playerData.map(p => ({ id: p.id, color: p.color, territories: p.territories, totalPieces: p.totalPieces, alive: p.alive })), boardSize }; try { localStorage.setItem('squareLordsSave', JSON.stringify(state)); alert('Game state saved!'); } catch (e) { console.error('Save failed', e); alert('Failed to save game state.'); } }
+function loadGameState() { const raw = localStorage.getItem('squareLordsSave'); if (!raw) { alert('No save found.'); return false; } try { const state = JSON.parse(raw); if (!state || !Array.isArray(state.cells) || state.cells.length !== cells.length){ alert('Incompatible save data.'); return false; } state.cells.forEach((c, i) => { cells[i].owner = c.owner; cells[i].pieces = c.pieces; updateCell(cells[i]); }); if (typeof state.currentPlayer === 'number') currentPlayer = state.currentPlayer; if (Array.isArray(state.playerData)){ state.playerData.forEach((p, i) => { if (playerData[i]) Object.assign(playerData[i], p); }); } updateTurnDisplay(); renderPlayerInfo(); alert('Game loaded.'); return true; } catch (e) { console.error('Failed to load save:', e); alert('Failed to load save data.'); return false; } }
+saveBtn.addEventListener('click', saveGameState);
+loadBtn.addEventListener('click', loadGameState);
+
+/* Initialize game */
 assignStartingCells();
 updateTurnDisplay();
 
-/* minor niceties */
-document.addEventListener('click', (ev)=>{
-  if (!ev.target.closest('.cell') && !ev.target.closest('#controls')){
-    clearSelection();
-  }
-});
-boardEl.addEventListener('dblclick', (ev)=>{ const el = ev.target.closest('.cell'); if (!el) return; const idx = Number(el.dataset.index); console.log(cells[idx]); });
-
-function saveGameState() {
-  const state = {
-    currentPlayer,
-    cells: cells.map(c => ({ owner: c.owner, pieces: c.pieces })),
-    playerData: playerData.map(p => ({ id: p.id, color: p.color, territories: p.territories, totalPieces: p.totalPieces, alive: p.alive })),
-  };
-  localStorage.setItem('squareLordsSave', JSON.stringify(state));
-  alert('Game state saved!');
-}
-
-function loadGameState() {
-  const raw = localStorage.getItem('squareLordsSave');
-  if (!raw) return false;
-  try {
-    const state = JSON.parse(raw);
-    state.cells.forEach((c, i) => {
-      cells[i].owner = c.owner;
-      cells[i].pieces = c.pieces;
-      updateCell(cells[i]);
-    });
-    currentPlayer = state.currentPlayer;
-    state.playerData.forEach((p, i) => {
-      Object.assign(playerData[i], p);
-    });
-    updateTurnDisplay();
-    renderPlayerInfo();
-    return true;
-  } catch (e) {
-    console.error('Failed to load save:', e);
-    return false;
-  }
-}
 </script>
 </body>
 </html>
