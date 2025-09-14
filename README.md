@@ -38,6 +38,7 @@ Got ideas? Found bugs?
 - [ ] Add cache or saving mechanism
 - [ ] Add a timer to the end button, so you cannot spam
 - [ ] Add a max number to each square
+- [ ] Add a win page
 - [ ] Add AI opponents 
 - [ ] Online multiplayer  
 - [ ] More themes and board styles  
