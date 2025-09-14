@@ -35,14 +35,14 @@ Got ideas? Found bugs?
 
 ## Roadmap
 
-- [ ] Add cache or saving mechanism
-- [ ] Add a timer to the end button, so you cannot spam
-- [ ] Add a max number to each square
+- [x] Add cache or saving mechanism
+- [x] Add a timer to the end button, so you cannot spam
+- [x] Add a max number to each square
 - [ ] Add a win page
 - [ ] Add AI opponents 
 - [ ] Online multiplayer  
 - [ ] More themes and board styles  
-- [ ] Mobile-friendly controls
+- [x] Mobile-friendly controls
 - [ ] Make the board more clear to use
 - [ ] Bug fixing  
 
