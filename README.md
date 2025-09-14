@@ -9,7 +9,7 @@ Conquer squares, expand your empire, and crush your opponents in a battle for to
 ## Features
 
 - Dynamic grid board – board size scales with player count  
-- 2–8 players – play solo vs. AI or pass-and-play with friends  
+- 2–8 players – pass-and-play with friends, later with AI  
 - Risk-style combat – attack, defend, and expand your territory  
 - Animated turns – smooth pawn placement and battle resolution  
 - Clean UI & sound effects – immersive experience without clutter  
