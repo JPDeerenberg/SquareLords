@@ -56,21 +56,34 @@ Conquer squares, expand your empire, and crush your opponents in a battle for to
 <span id="playerValue">2</span> Players
 </div>
 
+<label for="boardSize" style="margin-top:20px;display:block;">Board Size:</label>
+<input type="range" id="boardSize" min="5" max="20" value="10">
+<div class="value">
+<span id="boardValue">10</span> x <span id="boardValue">10</span> Board
+</div>
+
 <button id="startBtn">Start Game</button>
 </div>
 
 <script>
 const slider = document.getElementById("playerCount");
 const valueDisplay = document.getElementById("playerValue");
+const boardSlider = document.getElementById("boardSize");
+const boardValueDisplay = document.querySelectorAll("#boardValue");
 const startBtn = document.getElementById("startBtn");
 
 slider.addEventListener("input", () => {
-valueDisplay.textContent = slider.value;
+  valueDisplay.textContent = slider.value;
+});
+
+boardSlider.addEventListener("input", () => {
+  boardValueDisplay.forEach(el => el.textContent = boardSlider.value);
 });
 
 startBtn.addEventListener("click", () => {
-const players = slider.value;
-window.location.href = `game.html?players=${players}`;
+  const players = slider.value;
+  const boardSize = boardSlider.value;
+  window.location.href = `game.html?players=${players}&board=${boardSize}`;
 });
 </script>
 </body>
