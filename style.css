@@ -1,0 +1,194 @@
+:root{
+  --bg:#0f0f12;
+  --panel:#1d1d22;
+  --gap:6px;
+  --accent:#ffb86b;
+}
+
+/* Page */
+html,body{
+  height:100%;
+  margin:0;
+  background:var(--bg);
+  color:#e6eef6;
+  font-family:Inter, "Segoe UI", Arial, sans-serif;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  box-sizing:border-box;
+}
+*,*::before,*::after{box-sizing:inherit}
+
+/* Wrapper + header */
+.wrap{max-width:1200px;margin:12px auto;padding:12px;display:flex;flex-direction:column;align-items:center;gap:12px}
+header{width:100%;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+#turnDisplay { font-weight:900; font-size:clamp(1.2rem, 2.4vw, 2.4rem); transition: color 0.15s; }
+
+/* Buttons */
+button{background:#2fb871;border:none;color:#fff;padding:clamp(8px,1.2vw,12px) clamp(12px,1.8vw,16px);border-radius:8px;cursor:pointer;font-weight:700;font-size:clamp(.9rem,1.6vw,1rem)}
+button:disabled{opacity:.5;cursor:default}
+
+/* Board panel (positioning + containment) */
+#boardPanel{
+  background:var(--panel);
+  padding:12px;
+  border-radius:10px;
+  width:100%;
+  display:flex;
+  justify-content:center;
+  position:relative;      /* overlays positioned relative to this */
+  overflow:hidden;        /* ensure overlays don't force layout growth */
+}
+
+/* Board grid: size to viewport but never explode */
+#board{
+  /* prefer viewport-relative size but clamp to sane max so huge monitors don't explode layout */
+  width:min(90vmin, 88vh, 900px);
+  aspect-ratio:1/1;
+  display:grid;
+  gap:var(--gap);
+  height:auto;
+  /* ensure grid won't force parent to grow due to children */
+  max-width:100%;
+}
+
+/* Cells */
+.cell{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight:800;
+  user-select:none;
+  border-radius:8px;
+  box-shadow:0 2px 0 rgba(0,0,0,.4) inset;
+  cursor:pointer;
+  transition:transform .08s,box-shadow .08s,outline-color .12s;
+  position:relative;
+  padding:6px;
+  min-height:0; /* help with very small containers */
+}
+.cell:hover{transform:translateY(-3px)}
+.cell.selected{outline:3px solid rgba(255,255,255,.08);box-shadow:0 8px 20px rgba(0,0,0,.6)}
+.flash-capture{animation:flashCapture .9s ease}
+.flash-defend{animation:flashDefend .7s ease}
+@keyframes flashCapture{0%{transform:scale(1.02);box-shadow:0 8px 30px rgba(0,0,0,.6)}50%{transform:scale(1.05)}100%{transform:scale(1.01)}}
+@keyframes flashDefend{0%{transform:translateY(0)}50%{transform:translateY(-6px) rotate(-2deg)}100%{transform:translateY(0)}}
+
+/* cell counter sizing: responsive but never tiny */
+.cnt{font-weight:900;font-size:clamp(14px, 2.6vmin, 28px);pointer-events:none;line-height:1}
+
+/* Info / badges */
+#info{width:100%;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.player-badge{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,.03);font-weight:700;font-size:clamp(.8rem,1.6vw,1rem)}
+.swatch{width:16px;height:16px;border-radius:4px}
+
+/* battle overlay - absolute and non-layout-affecting */
+#battleOverlay{
+  position:absolute;
+  left:0;right:0;top:0;bottom:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  pointer-events:none; /* default - children may enable pointer-events individually */
+  z-index:50;
+}
+
+/* Dice box: responsive size (no large min-width) */
+.diceBox{
+  pointer-events:auto;
+  background:rgba(8,8,10,.98);
+  border:1px solid rgba(255,255,255,.06);
+  padding:clamp(12px,2vw,18px);
+  border-radius:12px;
+  color:#fff;
+  width:clamp(280px, 90%, 520px);  /* responsive and capped */
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  align-items:center;
+  backdrop-filter:blur(4px);
+  position:relative;
+  z-index:60;
+  box-shadow:0 12px 36px rgba(0,0,0,.55);
+}
+
+/* Row for dice */
+.diceRow{display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap}
+.diceTotals{display:flex;gap:18px;align-items:center;width:100%;justify-content:space-between;font-weight:800}
+.diceLabel{font-size:13px;opacity:.95}
+.diceBtn{background:var(--accent);border:none;padding:8px 10px;border-radius:8px;font-weight:800;cursor:pointer}
+
+/* close button (inside dice box) */
+.closeBtn{position:absolute;right:12px;top:10px;background:transparent;border:none;color:rgba(255,255,255,.7);font-size:18px;cursor:pointer;padding:4px;border-radius:6px}
+.closeBtn:hover{background:rgba(255,255,255,.03)}
+
+/* Dice faces & pips (responsive) */
+.diceDie{
+  width:clamp(48px, 12vw, 92px);
+  height:clamp(48px, 12vw, 92px);
+  border-radius:12px;
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  grid-template-rows:repeat(3,1fr);
+  gap:6px;
+  padding:8px;
+  box-shadow:0 10px 28px rgba(0,0,0,.55);
+  background:#fff;
+  border:1px solid rgba(0,0,0,.08);
+  color:#000;
+  box-sizing:border-box;
+}
+.pip{width:clamp(8px,2.6vmin,18px);height:clamp(8px,2.6vmin,18px);border-radius:50%;background:#111;box-shadow:0 2px 0 rgba(255,255,255,.06) inset;justify-self:center;align-self:center}
+
+/* particle pawn */
+.pawnParticle{position:absolute;width:14px;height:14px;border-radius:50%;box-shadow:0 1px 0 rgba(0,0,0,.6);transform:translate(-50%,-50%) scale(1);transition:transform .6s ease,left .6s ease,top .6s ease,opacity .4s;z-index:60;pointer-events:none}
+
+/* make sure pawn animations don't trigger layout */
+.board *{will-change:transform}
+
+/* battle log — moved to bottom center, non-layout-affecting */
+#battleLog{
+  position:absolute;
+  left:50%;
+  transform:translateX(-50%) translateY(8px); /* start slightly lower for a subtle rise */
+  bottom:14px;                /* anchor to bottom */
+  top:auto;
+  background:rgba(0,0,0,.55);
+  padding:8px 12px;
+  border-radius:8px;
+  font-weight:800;
+  opacity:0;
+  transition:opacity .25s, transform .25s;
+  pointer-events:none;        /* doesn't capture pointer events */
+  z-index:120;                /* above dice overlay */
+  max-width:calc(100% - 28px);
+  box-sizing:border-box;
+  text-align:center;
+  font-size:clamp(.9rem,1.3vw,1rem);
+  line-height:1.1;
+  word-break:break-word;
+}
+#battleLog.show{
+  opacity:1;
+  transform:translateX(-50%) translateY(0);
+}
+
+/* camera shake */
+.shake{animation:shakeAnim .45s cubic-bezier(.12,.9,.3,1)}
+@keyframes shakeAnim{0%{transform:translate(0,0)}25%{transform:translate(-6px,2px)}50%{transform:translate(3px,-6px)}75%{transform:translate(-2px,4px)}100%{transform:translate(0,0)}}
+
+/* small screen tweaks */
+@media (max-width:768px){
+  header{flex-direction:column;align-items:flex-start}
+  #turnDisplay{font-size:clamp(1.1rem,5vw,1.8rem)}
+  button{width:auto}
+  .diceBox{width:min(92%,420px)}
+  .diceDie{width:clamp(44px,10vw,72px);height:clamp(44px,10vw,72px)}
+}
+
+/* extra small / phones */
+@media (max-width:480px){
+  .diceBox{padding:10px;border-radius:8px}
+  .diceDie{gap:4px;padding:6px}
+  .player-badge{font-size:.75rem}
+  .cnt{font-size:clamp(12px,3.8vmin,20px)}
+}
