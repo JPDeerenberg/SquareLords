@@ -38,11 +38,12 @@ Got ideas? Found bugs?
 - [x] Add cache or saving mechanism
 - [x] Add a timer to the end button, so you cannot spam
 - [x] Add a max number to each square
+- [ ] Add different sized squares
 - [ ] Add a win page
 - [ ] Add AI opponents 
 - [ ] Online multiplayer  
 - [ ] More themes and board styles  
-- [x] Mobile-friendly controls
+- [ ] Mobile-friendly controls (important!)
 - [ ] Make the board more clear to use
 - [ ] Bug fixing  
 

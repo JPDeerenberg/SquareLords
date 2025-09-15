@@ -126,9 +126,11 @@ const params = new URLSearchParams(window.location.search);
 let players = parseInt(params.get('players')) || 2;
 if (Number.isNaN(players)) players = 2;
 players = Math.max(2, Math.min(8, players));
-const gridSizes = {2:6,3:8,4:10,5:12,6:14,7:15,8:16};
-let boardSize = gridSizes[players] || 6;
-if (boardSize * boardSize < players) boardSize = Math.ceil(Math.sqrt(players));
+
+// Use board size from URL parameter, default to 10 if missing
+let boardSize = parseInt(params.get('board')) || 10;
+if (Number.isNaN(boardSize)) boardSize = 10;
+boardSize = Math.max(5, Math.min(20, boardSize)); // Clamp to allowed range
 
 const playerColors = ["#ff7b7b","#7bb8ff","#7bff9b","#ffcf7b","#be7bff","#4dd2d2","#ff88d1","#e6e66a"];
 const playerData = Array.from({length:players}, (_,i)=>({id:i+1,color:playerColors[i],territories:0,totalPieces:0,alive:true}));
