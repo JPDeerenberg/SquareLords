@@ -66,6 +66,9 @@ let boardSize = parseInt(params.get('board')) || 10;
 if (Number.isNaN(boardSize)) boardSize = 10;
 boardSize = Math.max(5, Math.min(20, boardSize)); // Clamp to allowed range
 
+// NEW FLAG: enable some 1x2 tiles when diffSquares=1
+const diffSquares = params.get('diffSquares') === '1';
+
 const playerColors = ["#ff7b7b","#7bb8ff","#7bff9b","#ffcf7b","#be7bff","#4dd2d2","#ff88d1","#e6e66a"];
 const playerData = Array.from({length:players}, (_,i)=>({id:i+1,color:playerColors[i],territories:0,totalPieces:0,alive:true}));
 
@@ -92,33 +95,192 @@ let diceHideTimer = null;
 boardEl.style.gridTemplateColumns = `repeat(${boardSize}, 1fr)`;
 boardEl.style.gridTemplateRows = `repeat(${boardSize}, 1fr)`;
 const totalCells = boardSize * boardSize;
+
+// We'll keep an entry for every grid index. Some entries are "primary" (have an element).
+// Some entries are covered by a primary (vertical or horizontal 1x2). Primary entries will have .span = [i] or [i, i+boardSize] or [i, i+1]
+// Covered entries will have .coveredBy = primaryIndex and primary=false.
 const cells = new Array(totalCells);
-for (let i=0;i<totalCells;i++){
-  const el = document.createElement('div');
-  el.className = 'cell';
-  el.dataset.index = i;
-  boardEl.appendChild(el);
-  cells[i] = { index: i, element: el, owner: null, pieces: 0 };
-}
+
+// Helpers for grid placements
+function rcToIndex(r,c){ return r*boardSize + c; }
+function indexToRC(idx){ return { r: Math.floor(idx/boardSize), c: idx%boardSize }; }
 
 // utilities
 function shuffle(array){ for(let i=array.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [array[i],array[j]]=[array[j],array[i]];} return array; }
 function randInt(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
 function textColorForHex(hex){ const h=hex.replace('#',''); const r=parseInt(h.substring(0,2),16); const g=parseInt(h.substring(2,4),16); const b=parseInt(h.substring(4,6),16); return ((r*299+g*587+b*114)/1000)>150 ? '#000' : '#fff'; }
-function indexToRC(idx){ return { r: Math.floor(idx/boardSize), c: idx%boardSize }; }
-function isAdjacent(i1,i2){ const a=indexToRC(i1), b=indexToRC(i2); return Math.abs(a.r-b.r)+Math.abs(a.c-b.c)===1; }
+
+// --- NEW: improved placement algorithm for vertical + horizontal 1x2 spans ---
+// Requirements implemented:
+//  - no overlap
+//  - no two spans orthogonally adjacent to each other (keeps them useful)
+//  - include both vertical and horizontal spans
+//  - scale number of spans with board size (small boards fewer, larger boards more)
+
+function manhattan(a,b){ const ar = Math.floor(a/boardSize), ac = a%boardSize; const br = Math.floor(b/boardSize), bc = b%boardSize; return Math.abs(ar-br) + Math.abs(ac-bc); }
+
+const occupied = new Set();         // all occupied indices (covered by any span)
+const primaryMap = {};              // primaryIndex -> { span: [i,...], orient: 'v'|'h' }
+
+if (diffSquares) {
+  // Determine target number of spans
+  // Small boards: mild count; large boards: scale with area so bigger maps get noticeably more spans
+  // below 7: keep previous conservative formula; from 7 onward scale with area
+  let targetSpans;
+  if (boardSize < 7) {
+    targetSpans = Math.max(1, Math.round(boardSize / 3));
+  } else {
+    // around totalCells / 12 gives reasonable density (7x7 => ~4, 10x10 => ~8)
+    targetSpans = Math.round(totalCells / 12);
+  }
+  // never exceed a third of possible primary cells
+  const maxPossible = Math.floor(totalCells / 3);
+  targetSpans = Math.max(1, Math.min(targetSpans, maxPossible));
+
+  // Build candidate positions for both vertical and horizontal spans
+  const candidates = [];
+  for (let r=0;r<boardSize;r++){
+    for (let c=0;c<boardSize;c++){
+      const i = rcToIndex(r,c);
+      // vertical candidate (top cell must not be bottom row)
+      if (r < boardSize - 1) candidates.push({ idx: i, orient: 'v' });
+      // horizontal candidate (left cell must not be rightmost column)
+      if (c < boardSize - 1) candidates.push({ idx: i, orient: 'h' });
+    }
+  }
+  shuffle(candidates);
+
+  const placed = [];
+
+  for (let k=0; k<candidates.length && placed.length < targetSpans; k++){
+    const cand = candidates[k];
+    const top = cand.idx;
+    const rc = indexToRC(top);
+    let covered;
+    if (cand.orient === 'v') {
+      covered = [ top, rcToIndex(rc.r + 1, rc.c) ];
+    } else {
+      covered = [ top, rcToIndex(rc.r, rc.c + 1) ];
+    }
+
+    // Availability: ensure none of the covered indices already occupied
+    if (covered.some(ci => occupied.has(ci))) continue;
+
+    // Ensure candidate is not orthogonally adjacent to any existing placed span
+    let ok = true;
+    for (const p of placed){
+      const primCovered = p.span;
+      for (const a of covered){
+        for (const b of primCovered){
+          if (manhattan(a,b) === 0) { ok = false; break; } // overlap (shouldn't happen)
+          if (manhattan(a,b) === 1) { ok = false; break; } // orthogonally adjacent — disallowed
+        }
+        if (!ok) break;
+      }
+      if (!ok) break;
+    }
+    if (!ok) continue;
+
+    // Accept candidate: mark occupied and record primary
+    covered.forEach(ci => occupied.add(ci));
+    primaryMap[top] = { span: covered.slice(), orient: cand.orient };
+    placed.push({ top, span: covered.slice(), orient: cand.orient });
+  }
+  // done placement
+}
+
+// Create DOM elements for primary cells only
+for (let r=0;r<boardSize;r++){
+  for (let c=0;c<boardSize;c++){
+    const i = rcToIndex(r,c);
+
+    // If this index is a primaryMap key => create primary element with orientation
+    if (primaryMap[i]){
+      const info = primaryMap[i];
+      const el = document.createElement('div');
+      el.className = 'cell';
+      el.dataset.index = i;
+      if (info.orient === 'v'){
+        el.style.gridRowStart = (r+1);
+        el.style.gridRowEnd = `span 2`;
+        el.style.gridColumnStart = (c+1);
+      } else {
+        el.style.gridRowStart = (r+1);
+        el.style.gridColumnStart = (c+1);
+        el.style.gridColumnEnd = `span 2`;
+      }
+      boardEl.appendChild(el);
+      cells[i] = { index: i, element: el, owner: null, pieces: 0, primary: true, span: info.span.slice() };
+      // mark covered (other) index as non-primary
+      for (const ci of info.span){
+        if (ci === i) continue;
+        cells[ci] = { index: ci, element: null, owner: null, pieces: 0, primary: false, coveredBy: i };
+      }
+      continue;
+    }
+
+    // If this index is covered by someone else, skip DOM creation (it's part of a span)
+    if (cells[i] && cells[i].primary === false) {
+      continue;
+    }
+
+    // Normal single cell
+    const el = document.createElement('div');
+    el.className = 'cell';
+    el.dataset.index = i;
+    el.style.gridRowStart = (r+1);
+    el.style.gridColumnStart = (c+1);
+    boardEl.appendChild(el);
+    cells[i] = { index: i, element: el, owner: null, pieces: 0, primary: true, span: [i] };
+  }
+}
+
+// helper: get primary cell object for an index/cell (always returns the primary cell)
+function getPrimaryCell(objOrIndex){
+  let idx = (typeof objOrIndex === 'number') ? objOrIndex : (objOrIndex && objOrIndex.index);
+  if (idx == null) return null;
+  const c = cells[idx];
+  if (!c) return null;
+  if (c.primary) return c;
+  if (typeof c.coveredBy === 'number') return cells[c.coveredBy];
+  return c;
+}
+
+// helper: covered indices for a cell index (returns array of grid indices)
+function coveredIndicesFor(idx){
+  const primary = getPrimaryCell(idx);
+  if (!primary) return [];
+  return primary.span || [primary.index];
+}
+
+// adjacency now respects spans: any covered subcell adjacent to any covered subcell counts
+function isAdjacent(i1,i2){
+  const aIndices = coveredIndicesFor(i1);
+  const bIndices = coveredIndicesFor(i2);
+  for (let ia of aIndices){
+    const ra = Math.floor(ia/boardSize), ca = ia%boardSize;
+    for (let ib of bIndices){
+      const rb = Math.floor(ib/boardSize), cb = ib%boardSize;
+      if (Math.abs(ra-rb)+Math.abs(ca-cb) === 1) return true;
+    }
+  }
+  return false;
+}
 
 // render helpers
 function updateCell(cell){
-  const el = cell.element;
-  if (cell.owner){
-    const color = playerData[cell.owner-1].color;
+  // allow calling with either primary or covered cell
+  const primary = getPrimaryCell(cell);
+  if (!primary || !primary.element) return;
+  const el = primary.element;
+  if (primary.owner){
+    const color = playerData[primary.owner-1].color;
     el.style.background = color;
     el.style.color = textColorForHex(color);
     let counter = el.querySelector('.cnt');
     if (!counter){ counter = document.createElement('div'); counter.className = 'cnt'; counter.style.pointerEvents='none'; el.innerHTML = ''; el.appendChild(counter); }
-    counter.textContent = cell.pieces;
-    el.title = `Player ${cell.owner} — Pieces: ${cell.pieces}`;
+    counter.textContent = primary.pieces;
+    el.title = `Player ${primary.owner} — Pieces: ${primary.pieces}`;
   } else {
     el.style.background = '#222';
     el.style.color = '#fff';
@@ -127,11 +289,12 @@ function updateCell(cell){
   }
 }
 
-// animate numeric tween
+// animate numeric tween (always operate on primary cell)
 function animateNumber(cellObj, newVal, duration = 500){
-  if (!cellObj || !cellObj.element) return;
-  const el = cellObj.element.querySelector('.cnt') || cellObj.element;
-  const start = cellObj.pieces;
+  const primary = getPrimaryCell(cellObj);
+  if (!primary || !primary.element) return;
+  const el = primary.element.querySelector('.cnt') || primary.element;
+  const start = primary.pieces;
   const steps = Math.max(6, Math.floor(duration/40));
   let step = 0;
   const diff = newVal - start;
@@ -144,36 +307,62 @@ function animateNumber(cellObj, newVal, duration = 500){
       el.textContent = newVal;
     }
   }, Math.max(8, duration/steps));
-  cellObj.pieces = newVal;
+  primary.pieces = newVal;
 }
 
 // render player info badges
-function recalcPlayerTotals(){ playerData.forEach(p=>{p.territories=0;p.totalPieces=0}); cells.forEach(c=>{ if (c.owner){ const p=playerData[c.owner-1]; if (p){ p.territories++; p.totalPieces+=c.pieces; } }}); playerData.forEach(p=>p.alive = p.territories>0); }
+function recalcPlayerTotals(){ 
+  playerData.forEach(p=>{p.territories=0;p.totalPieces=0});
+  // count only primary cells as territories (so a 1x2 counts as 1 territory)
+  cells.forEach(c=>{
+    if (c && c.primary && c.owner){
+      const p = playerData[c.owner-1];
+      if (p){ p.territories++; p.totalPieces += c.pieces; }
+    }
+  });
+  playerData.forEach(p=>p.alive = p.territories>0);
+}
 function renderPlayerInfo(){ recalcPlayerTotals(); infoEl.innerHTML=''; playerData.forEach(p=>{ const badge=document.createElement('div'); badge.className='player-badge'; badge.innerHTML=`<div class="swatch" style="background:${p.color}"></div><div>P${p.id}</div><div style="opacity:.7">T:${p.territories}</div><div style="opacity:.7">S:${p.totalPieces}</div>`; infoEl.appendChild(badge); }); }
 
-// initial distribution (random round-robin) with random pieces 1..5
+// initial distribution (random round-robin) with random pieces 1..5,
+// but only assign to primary cells and mirror ownership to covered indices so other code doesn't freak out.
 function assignStartingCells(){
-  const indices = shuffle(Array.from({length:totalCells}, (_,i)=>i));
+  const primaryIndices = [];
+  for (let i=0;i<cells.length;i++){
+    if (cells[i] && cells[i].primary) primaryIndices.push(i);
+  }
+  const indices = shuffle(primaryIndices.slice());
   for (let i=0;i<indices.length;i++){
     const idx = indices[i];
     const pIdx = i % players;
     const cell = cells[idx];
+    const pieces = randInt(1,5);
+    // assign owner/pieces to primary
     cell.owner = pIdx+1;
-    cell.pieces = randInt(1,5);
+    cell.pieces = pieces;
+    // mirror ownership to covered indices so lookups at either index see the same owner
+    const span = cell.span || [idx];
+    span.forEach(si => {
+      if (si !== idx && cells[si]) {
+        cells[si].owner = cell.owner;
+        cells[si].pieces = cell.pieces; // mirror piece number but only primary will be shown/animated
+      }
+    });
     updateCell(cell);
   }
   renderPlayerInfo();
 }
 
 /* Reinforcement distribution */
-const MAX_PAWNS_PER_CELL = 20;
+const MAX_PAWNS_PER_CELL = 10;
 function distributeReinforcementsForPlayer(playerId){
-  const owned = cells.filter(c=>c.owner===playerId);
-  if (owned.length === 0) return;
-  const totalIncome = owned.length;
+  // count primary-owned cells only for income calculation
+  const ownedPrimaries = cells.filter(c=>c && c.primary && c.owner===playerId);
+  if (ownedPrimaries.length === 0) return;
+  const totalIncome = ownedPrimaries.length;
   if (totalIncome <= 0) return;
 
-  let recipients = owned.filter(c => c.pieces < MAX_PAWNS_PER_CELL).map(c=>c.index);
+  let recipients = ownedPrimaries.filter(c => c.pieces < MAX_PAWNS_PER_CELL).map(c=>c.index);
 
   for (let i=0;i<totalIncome;i++){
     if (recipients.length === 0) break;
@@ -182,7 +371,7 @@ function distributeReinforcementsForPlayer(playerId){
     if (!cell) { recipients = recipients.filter(idx => idx !== pick); continue; }
     if (cell.pieces >= MAX_PAWNS_PER_CELL) { recipients = recipients.filter(idx => idx !== pick); continue; }
 
-    // particle spawn
+    // particle spawn (visual) - use primary element
     const rect = boardEl.getBoundingClientRect();
     const sx = rect.width/2;
     const sy = -20;
@@ -200,6 +389,9 @@ function distributeReinforcementsForPlayer(playerId){
     setTimeout(()=>{
       if (cell.pieces < MAX_PAWNS_PER_CELL) {
         animateNumber(cell, Math.min(MAX_PAWNS_PER_CELL, cell.pieces+1), 360);
+        // also mirror pieces to covered indices so saves/load and other logic stay consistent
+        const span = cell.span || [cell.index];
+        span.forEach(si => { if (cells[si] && !cells[si].primary) cells[si].pieces = cell.pieces; });
         renderPlayerInfo();
         if (cell.pieces >= MAX_PAWNS_PER_CELL) {
           recipients = recipients.filter(idx => idx !== pick);
@@ -254,8 +446,8 @@ function showDiceOverlay(attCount, defCount){
   attCountEl.textContent = attCount;
   defCountEl.textContent = defCount;
   clearDiceUI();
-  for(let i=0;i<attCount;i++){ const d = document.createElement('div'); d.className='diceDie'; attRow.appendChild(d); }
-  for(let i=0;i<defCount;i++){ const d = document.createElement('div'); d.className='diceDie'; defRow.appendChild(d); }
+  for(let i=0;i<attCount;i++){ const d = document.createElement('div'); d.className = 'diceDie'; attRow.appendChild(d); }
+  for(let i=0;i<defCount;i++){ const d = document.createElement('div'); d.className = 'diceDie'; defRow.appendChild(d); }
 }
 function hideDiceOverlayAfter(ms=3000){ clearTimeout(diceHideTimer); diceHideTimer = setTimeout(()=>{ battleOverlay.style.display='none'; battleOverlay.setAttribute('aria-hidden','true'); clearDiceUI(); }, ms); }
 function hideDiceOverlayNow(){ clearTimeout(diceHideTimer); battleOverlay.style.display='none'; battleOverlay.setAttribute('aria-hidden','true'); clearDiceUI(); }
@@ -314,12 +506,12 @@ function shakeBoard(){ boardEl.classList.add('shake'); setTimeout(()=> boardEl.c
 let locked = false;
 function performAttackAnimated(srcIdx, tgtIdx){
   if (locked) return;
-  const src = cells[srcIdx];
-  const tgt = cells[tgtIdx];
+  const src = getPrimaryCell(srcIdx);
+  const tgt = getPrimaryCell(tgtIdx);
   if (!src || !tgt) return;
   if (src.owner !== currentPlayer) return;
   if (!tgt.owner || tgt.owner === currentPlayer) return;
-  if (!isAdjacent(srcIdx, tgtIdx)) return;
+  if (!isAdjacent(src.index, tgt.index)) return;
 
   const commitRaw = Math.max(0, src.pieces - 1);
   if (commitRaw <= 0){ showBattleLog('Cannot attack — must leave 1 behind.'); return; }
@@ -350,10 +542,18 @@ function performAttackAnimated(srcIdx, tgtIdx){
       animateNumber(src, newSrcPieces, 500);
 
       setTimeout(()=>{
+        // capture: set owner/pieces of primary (and mirror to covered indices)
         tgt.owner = currentPlayer;
         updateCell(tgt);
         const moveIn = Math.min(commitRaw, Math.max(1, commitRaw));
         animateNumber(tgt, moveIn, 600);
+        // ensure mirrored indices reflect same owner/pieces
+        (tgt.span || [tgt.index]).forEach(si => {
+          if (cells[si]) {
+            cells[si].owner = currentPlayer;
+            cells[si].pieces = moveIn;
+          }
+        });
         renderPlayerInfo();
       }, 220);
 
@@ -387,7 +587,7 @@ function startEndTurnCooldown(seconds = 5) { endTurnBtn.disabled = true; endTurn
 
 endTurnBtn.addEventListener('click', ()=>{ if (locked || endTurnBtn.disabled) return; distributeReinforcementsForPlayer(currentPlayer); const nxt = nextAlivePlayer(currentPlayer); if (nxt !== null && nxt !== currentPlayer) currentPlayer = nxt; updateTurnDisplay(); setTimeout(()=>{ renderPlayerInfo(); checkWinCondition(); }, 420); startEndTurnCooldown(5); });
 
-function clearSelection(){ if (typeof selectedCell !== 'undefined' && selectedCell !== null) cells[selectedCell].element.classList.remove('selected'); selectedCell=null; }
+function clearSelection(){ if (typeof selectedCell !== 'undefined' && selectedCell !== null) { const selPrimary = getPrimaryCell(selectedCell); if (selPrimary && selPrimary.element) selPrimary.element.classList.remove('selected'); } selectedCell=null; }
 let selectedCell = null;
 
 function handleCellSelect(ev){
@@ -395,30 +595,33 @@ function handleCellSelect(ev){
   const el = ev.target.closest('.cell');
   if (!el) return;
   const idx = Number(el.dataset.index);
-  const c = cells[idx];
+  const c = getPrimaryCell(idx);
+  if (!c) return;
   if (selectedCell === null){
     if (c.owner === currentPlayer){
-      selectedCell = idx;
+      selectedCell = c.index;
       c.element.classList.add('selected');
     }
     return;
   }
-  if (selectedCell === idx){
+  if (selectedCell === c.index){
     clearSelection();
     return;
   }
-  if (c.owner === currentPlayer){
-    cells[selectedCell].element.classList.remove('selected');
-    selectedCell = idx;
-    cells[selectedCell].element.classList.add('selected');
+  const newCell = getPrimaryCell(idx);
+  if (newCell.owner === currentPlayer){
+    const prev = getPrimaryCell(selectedCell);
+    if (prev && prev.element) prev.element.classList.remove('selected');
+    selectedCell = newCell.index;
+    if (newCell.element) newCell.element.classList.add('selected');
     return;
   }
-  if (c.owner && c.owner !== currentPlayer){
-    if (!isAdjacent(selectedCell, idx)){
+  if (newCell.owner && newCell.owner !== currentPlayer){
+    if (!isAdjacent(selectedCell, newCell.index)){
       el.animate([{transform:'translateY(0)'},{transform:'translateY(-6px)'},{transform:'translateY(0)'}],{duration:160});
       return;
     }
-    performAttackAnimated(selectedCell, idx);
+    performAttackAnimated(selectedCell, newCell.index);
   }
 }
 
@@ -434,7 +637,7 @@ boardEl.addEventListener('touchstart', function(ev){
 
 /* Improve outside click clearing */
 document.addEventListener('click', (ev)=>{ if (!ev.target.closest('.cell') && !ev.target.closest('button') && !ev.target.closest('#diceBox')){ clearSelection(); } });
-boardEl.addEventListener('dblclick', (ev)=>{ const el = ev.target.closest('.cell'); if (!el) return; const idx = Number(el.dataset.index); console.log(cells[idx]); });
+boardEl.addEventListener('dblclick', (ev)=>{ const el = ev.target.closest('.cell'); if (!el) return; const idx = Number(el.dataset.index); console.log(getPrimaryCell(idx)); });
 
 /* Close button handler: hide overlay immediately (UI only) */
 diceCloseBtn.addEventListener('click', ()=>{ hideDiceOverlayNow(); });
@@ -444,8 +647,31 @@ function checkPlayerElimination(){ recalcPlayerTotals(); }
 function checkWinCondition(){ recalcPlayerTotals(); const alivePlayers = playerData.filter(p=>p.alive); if (alivePlayers.length === 1){ const winner = alivePlayers[0]; setTimeout(()=> alert(`Player ${winner.id} wins!`), 40); } }
 
 /* Save / Load */
-function saveGameState() { const state = { currentPlayer, cells: cells.map(c => ({ owner: c.owner, pieces: c.pieces })), playerData: playerData.map(p => ({ id: p.id, color: p.color, territories: p.territories, totalPieces: p.totalPieces, alive: p.alive })), boardSize }; try { localStorage.setItem('squareLordsSave', JSON.stringify(state)); alert('Game state saved!'); } catch (e) { console.error('Save failed', e); alert('Failed to save game state.'); } }
-function loadGameState() { const raw = localStorage.getItem('squareLordsSave'); if (!raw) { alert('No save found.'); return false; } try { const state = JSON.parse(raw); if (!state || !Array.isArray(state.cells) || state.cells.length !== cells.length){ alert('Incompatible save data.'); return false; } state.cells.forEach((c, i) => { cells[i].owner = c.owner; cells[i].pieces = c.pieces; updateCell(cells[i]); }); if (typeof state.currentPlayer === 'number') currentPlayer = state.currentPlayer; if (Array.isArray(state.playerData)){ state.playerData.forEach((p, i) => { if (playerData[i]) Object.assign(playerData[i], p); }); } updateTurnDisplay(); renderPlayerInfo(); alert('Game loaded.'); return true; } catch (e) { console.error('Failed to load save:', e); alert('Failed to load save data.'); return false; } }
+function saveGameState() { 
+  // Save owner/pieces for every grid index so save/load remains compatible
+  const state = { currentPlayer, cells: cells.map(c => ({ owner: c ? c.owner : null, pieces: c ? c.pieces : 0 })), playerData: playerData.map(p => ({ id: p.id, color: p.color, territories: p.territories, totalPieces: p.totalPieces, alive: p.alive })), boardSize, diffSquares }; 
+  try { localStorage.setItem('squareLordsSave', JSON.stringify(state)); alert('Game state saved!'); } catch (e) { console.error('Save failed', e); alert('Failed to save game state.'); } 
+}
+function loadGameState() { 
+  const raw = localStorage.getItem('squareLordsSave'); 
+  if (!raw) { alert('No save found.'); return false; } 
+  try { const state = JSON.parse(raw); if (!state || !Array.isArray(state.cells) || state.cells.length !== cells.length){ alert('Incompatible save data.'); return false; } 
+    state.cells.forEach((c, i) => { 
+      if (!cells[i]) return;
+      // Map saved owner/pieces onto our cells; primary cells are the authoritative visual ones
+      cells[i].owner = c.owner;
+      cells[i].pieces = c.pieces;
+    }); 
+    // After load, ensure primary elements reflect mirrored pieces for their covered indices
+    for (let i=0;i<cells.length;i++){
+      const pr = getPrimaryCell(i);
+      if (pr && pr.element) updateCell(pr);
+    }
+    if (typeof state.currentPlayer === 'number') currentPlayer = state.currentPlayer; 
+    if (Array.isArray(state.playerData)){ state.playerData.forEach((p, i) => { if (playerData[i]) Object.assign(playerData[i], p); }); } 
+    updateTurnDisplay(); renderPlayerInfo(); alert('Game loaded.'); return true; 
+  } catch (e) { console.error('Failed to load save:', e); alert('Failed to load save data.'); return false; } 
+}
 saveBtn.addEventListener('click', saveGameState);
 loadBtn.addEventListener('click', loadGameState);
 
