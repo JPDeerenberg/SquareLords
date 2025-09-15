@@ -35,16 +35,19 @@ Got ideas? Found bugs?
 
 ## Roadmap
 
+### Now:
 - [x] Add cache or saving mechanism
 - [x] Add a timer to the end button, so you cannot spam
 - [x] Add a max number to each square
+- [ ] Mobile-friendly controls (important!)
 - [ ] Add different sized squares
 - [ ] Add a win page
-- [ ] Add AI opponents 
-- [ ] Online multiplayer  
-- [ ] More themes and board styles  
-- [ ] Mobile-friendly controls (important!)
+- [ ] More themes and board styles
 - [ ] Make the board more clear to use
+
+### Future:
+- [ ] Add AI opponents
+- [ ] Online multiplayer
 - [ ] Bug fixing  
 
 ---
