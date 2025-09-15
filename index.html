@@ -1,97 +1,225 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Game Start</title>
-<style>
-body {
-font-family: Arial, sans-serif;
-      text-align: center;
-      padding: 40px;
-      background: #111;
-      color: #eee;
-    }
-    .container {
-      max-width: 400px;
-      margin: auto;
-      background: #222;
-      padding: 20px;
-      border-radius: 12px;
-      box-shadow: 0 0 10px #000;
-    }
-    input[type="range"] {
-      width: 100%;
-    }
-    .value {
-      font-size: 1.5em;
-      margin: 10px 0;
-    }
-    button {
-      background: #28a745;
-      color: white;
-      border: none;
-      padding: 12px 20px;
-      font-size: 1em;
-      border-radius: 8px;
-      cursor: pointer;
-    }
-    button:hover {
-      background: #218838;
-    }
-</style>
-</head>
-<body>
-<div class="container">
-<h1>Welcome to SquareLords</h1>
-<p id="intro">
-SquareLords is a fast-paced, Risk-inspired strategy game built with plain JavaScript, HTML, and CSS. No frameworks, no installs—just open and play.
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Game Start</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        text-align: center;
+        padding: 40px;
+        background: #111;
+        color: #eee;
+      }
+      .container {
+        max-width: 400px;
+        margin: auto;
+        background: #222;
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 0 10px #000;
+      }
+      input[type="range"] {
+        width: 100%;
+      }
+      .value {
+        font-size: 1.5em;
+        margin: 10px 0;
+      }
+      button {
+        background: #28a745;
+        color: white;
+        border: none;
+        padding: 12px 20px;
+        font-size: 1em;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #218838;
+      }
+      .rules {
+        max-width: 700px;
+        margin: 30px auto;
+        background: #222;
+        padding: 24px;
+        border-radius: 12px;
+        box-shadow: 0 0 12px rgba(0, 0, 0, 0.6);
+        text-align: left;
+        line-height: 1.6;
+      }
 
-Conquer squares, expand your empire, and crush your opponents in a battle for total domination.
-</p>
+      .rules h2,
+      .rules h3 {
+        margin-top: 0;
+        color: #fff;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        padding-bottom: 6px;
+      }
 
-<label for="playerCount">Number of Players:</label>
-<input type="range" id="playerCount" min="2" max="8" value="2">
-<div class="value">
-<span id="playerValue">2</span> Players
-</div>
+      .rules ul,
+      .rules ol {
+        padding-left: 20px;
+        margin: 10px 0;
+      }
 
-<label for="boardSize" style="margin-top:20px;display:block;">Board Size:</label>
-<input type="range" id="boardSize" min="5" max="20" value="10">
-<div class="value">
-<span id="boardValue">10</span> x <span id="boardValue">10</span> Board
-</div>
+      .rules li {
+        margin: 6px 0;
+      }
 
-<label for="differentSquares" style="margin-top:20px;display:block;">
-  <input type="checkbox" id="differentSquares">
-  Use Different Sized Squares
-</label>
+      .rules code {
+        background: #111;
+        padding: 2px 6px;
+        border-radius: 6px;
+        font-family: monospace;
+        color: #ffb86b;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Welcome to SquareLords</h1>
+      <div class="rules" id="intro">
+        <h2>How the Game Works</h2>
 
-<button id="startBtn">Start Game</button>
-</div>
+        <p>
+          This project is a simple territory-control game inspired by Risk. The
+          board is a square grid where each tile is a
+          <strong>territory</strong>. Players compete to expand their control,
+          reinforce their holdings, and eliminate opponents.
+        </p>
 
-<script>
-const slider = document.getElementById("playerCount");
-const valueDisplay = document.getElementById("playerValue");
-const boardSlider = document.getElementById("boardSize");
-const boardValueDisplay = document.querySelectorAll("#boardValue");
-const startBtn = document.getElementById("startBtn");
-const differentSquares = document.getElementById("differentSquares");
+        <h3>Setup</h3>
+        <ul>
+          <li>
+            The board size and player count are chosen through URL parameters,
+            e.g. <code>game.html?players=4&amp;board=10</code>
+          </li>
+          <li>
+            Each player starts with:
+            <ul>
+              <li>Random territories</li>
+              <li>A random number of pieces on them</li>
+            </ul>
+          </li>
+          <li>
+            Tiles can be:
+            <ul>
+              <li>Standard <strong>1×1 blocks</strong></li>
+              <li>
+                Special <strong>1×2 blocks</strong> (enabled with
+                <code>diffSquares=1</code>)
+                <ul>
+                  <li>These count as one territory</li>
+                  <li>They can be attacked from more sides</li>
+                </ul>
+              </li>
+            </ul>
+          </li>
+        </ul>
 
-slider.addEventListener("input", () => {
-  valueDisplay.textContent = slider.value;
-});
+        <h3>Turn Flow</h3>
+        <ol>
+          <li>
+            <strong>Reinforcements</strong>
+            <ul>
+              <li>
+                At the start of a player’s turn, they gain new troops equal to
+                the number of territories they own
+              </li>
+              <li>
+                Troops are automatically placed on their territories (randomly)
+              </li>
+            </ul>
+          </li>
+          <li>
+            <strong>Attacking</strong>
+            <ul>
+              <li>Select one of your territories with at least 2 pieces</li>
+              <li>Select an adjacent enemy territory</li>
+              <li>
+                Dice battle:
+                <ul>
+                  <li>Attacker rolls up to 6 dice</li>
+                  <li>Defender rolls dice equal to defending pieces (max 6)</li>
+                  <li>Higher total wins</li>
+                </ul>
+              </li>
+              <li>
+                If the attacker wins:
+                <ul>
+                  <li>They capture the territory</li>
+                  <li>They move pieces in</li>
+                </ul>
+              </li>
+            </ul>
+          </li>
+          <li>
+            <strong>Ending the Turn</strong>
+            <ul>
+              <li>Click <strong>End Turn</strong> to pass play</li>
+              <li>Cycle continues until only one player remains</li>
+            </ul>
+          </li>
+        </ol>
 
-boardSlider.addEventListener("input", () => {
-  boardValueDisplay.forEach(el => el.textContent = boardSlider.value);
-});
+        <h3>Victory</h3>
+        <ul>
+          <li>A player is eliminated when they have no territories left</li>
+          <li>The last player standing wins</li>
+        </ul>
 
-startBtn.addEventListener("click", () => {
-  const players = slider.value;
-  const boardSize = boardSlider.value;
-  const diffSquares = differentSquares.checked ? 1 : 0;
-  window.location.href = `game.html?players=${players}&board=${boardSize}&diffSquares=${diffSquares}`;
-});
-</script>
-</body>
+        <h3>URL Options</h3>
+        <ul>
+          <li><code>?players=X</code> → Number of players (2–8)</li>
+          <li><code>?board=X</code> → Board size (5–20)</li>
+          <li><code>?diffSquares=1</code> → Enables 1×2 tiles</li>
+        </ul>
+      </div>
+
+      <label for="playerCount">Number of Players:</label>
+      <input type="range" id="playerCount" min="2" max="8" value="2" />
+      <div class="value"><span id="playerValue">2</span> Players</div>
+
+      <label for="boardSize" style="margin-top: 20px; display: block"
+        >Board Size:</label
+      >
+      <input type="range" id="boardSize" min="5" max="20" value="10" />
+      <div class="value">
+        <span id="boardValue">10</span> x <span id="boardValue">10</span> Board
+      </div>
+
+      <label for="differentSquares" style="margin-top: 20px; display: block">
+        <input type="checkbox" id="differentSquares" />
+        Use Different Sized Squares
+      </label>
+
+      <button id="startBtn">Start Game</button>
+    </div>
+
+    <script>
+      const slider = document.getElementById("playerCount");
+      const valueDisplay = document.getElementById("playerValue");
+      const boardSlider = document.getElementById("boardSize");
+      const boardValueDisplay = document.querySelectorAll("#boardValue");
+      const startBtn = document.getElementById("startBtn");
+      const differentSquares = document.getElementById("differentSquares");
+
+      slider.addEventListener("input", () => {
+        valueDisplay.textContent = slider.value;
+      });
+
+      boardSlider.addEventListener("input", () => {
+        boardValueDisplay.forEach((el) => (el.textContent = boardSlider.value));
+      });
+
+      startBtn.addEventListener("click", () => {
+        const players = slider.value;
+        const boardSize = boardSlider.value;
+        const diffSquares = differentSquares.checked ? 1 : 0;
+        window.location.href = `game.html?players=${players}&board=${boardSize}&diffSquares=${diffSquares}`;
+      });
+    </script>
+  </body>
 </html>

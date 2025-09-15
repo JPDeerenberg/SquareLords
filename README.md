@@ -39,8 +39,8 @@ Got ideas? Found bugs?
 - [x] Add cache or saving mechanism
 - [x] Add a timer to the end button, so you cannot spam
 - [x] Add a max number to each square
+- [X] Add different sized squares
 - [ ] Mobile-friendly controls (important!)
-- [ ] Add different sized squares
 - [ ] Add a win page
 - [ ] More themes and board styles
 - [ ] Make the board more clear to use
