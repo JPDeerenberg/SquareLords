@@ -92,6 +92,24 @@ button:disabled{opacity:.5;cursor:default}
   z-index:50;
 }
 
+/* Respect aria-hidden: hide overlay when true, show when false */
+#battleOverlay[aria-hidden="true"]{ display:none; }
+#battleOverlay[aria-hidden="false"]{ display:flex; }
+
+/* small utility for header controls */
+.controls{display:flex;gap:8px;align-items:center}
+
+/* Dice box header and layout helpers moved from inline styles */
+.diceHeader{display:flex;justify-content:space-between;align-items:center;width:100%}
+.diceTitle{font-weight:900}
+.spacer{width:100%}
+.spacer-small{height:8px}
+.spacer-medium{height:10px}
+.diceTotalsRow{width:100%;display:flex;justify-content:space-between;align-items:center}
+.diceTotalsRight{display:flex;gap:12px;align-items:center}
+.diceTotalValue{font-size:20px;font-weight:900}
+.muted{opacity:.5}
+
 /* Dice box: responsive size (no large min-width) */
 .diceBox{
   pointer-events:auto;

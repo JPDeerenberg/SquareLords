@@ -10,7 +10,7 @@
 <div class="wrap">
   <header>
     <div id="turnDisplay">Player 1's Turn</div>
-    <div style="display:flex;gap:8px;align-items:center">
+    <div class="controls">
       <button id="endTurnBtn">End Turn</button>
     </div>
     <div>
@@ -23,26 +23,26 @@
     <div id="board" role="grid" aria-label="game board"></div>
 
     <!-- battle overlay (hidden until an attack) -->
-    <div id="battleOverlay" aria-hidden="true" style="display:none">
+  <div id="battleOverlay" aria-hidden="true">
       <div class="diceBox" id="diceBox" role="dialog" aria-modal="true">
         <button class="closeBtn" id="diceClose" title="Close">x</button>
-        <div style="display:flex;justify-content:space-between;align-items:center;width:100%">
-          <div style="font-weight:900">Battle</div>
+        <div class="diceHeader">
+          <div class="diceTitle">Battle</div>
         </div>
         <div class="diceTotals">
           <div class="diceLabel">Attacker (<span id="attCount">0</span>)</div>
           <div class="diceLabel">Defender (<span id="defCount">0</span>)</div>
         </div>
         <div id="attRow" class="diceRow"></div>
-        <div style="height:8px"></div>
+        <div class="spacer spacer-small"></div>
         <div id="defRow" class="diceRow"></div>
-        <div style="height:10px"></div>
-        <div style="width:100%;display:flex;justify-content:space-between;align-items:center">
-          <div style="font-weight:900">Totals</div>
-          <div style="display:flex;gap:12px;align-items:center">
-            <div style="font-size:20px;font-weight:900" id="attTotal">0</div>
-            <div style="opacity:.5">vs</div>
-            <div style="font-size:20px;font-weight:900" id="defTotal">0</div>
+        <div class="spacer spacer-medium"></div>
+        <div class="diceTotalsRow">
+          <div class="diceTitle">Totals</div>
+          <div class="diceTotalsRight">
+            <div class="diceTotalValue" id="attTotal">0</div>
+            <div class="muted">vs</div>
+            <div class="diceTotalValue" id="defTotal">0</div>
           </div>
         </div>
       </div>
@@ -56,6 +56,25 @@
 
 <script>
 
+/*
+  SquareLords — game logic (inline)
+
+  Overview:
+  - Builds a square grid board and (optionally) some 1x2 spanning tiles
+  - Tracks simple territory ownership and piece counts per primary cell
+  - Allows selecting your own cell, attacking adjacent enemy cells using dice
+  - Handles reinforcement distribution, save/load (localStorage), and small UI animations
+
+  Important data shapes:
+  - `cells` is an array with one entry per grid index. Primary cells have .primary=true and an .element.
+    Covered indices (the second cell in a 1x2 span) are stored with primary=false and coveredBy -> primaryIndex.
+  - `playerData` holds static player colours and computed totals.
+  - `currentPlayer` is the active player id (1-based).
+
+  This file only adds comments — no logic changes.
+*/
+
+// Read URL parameters (players, board, diffSquares)
 const params = new URLSearchParams(window.location.search);
 let players = parseInt(params.get('players')) || 2;
 if (Number.isNaN(players)) players = 2;
@@ -66,13 +85,14 @@ let boardSize = parseInt(params.get('board')) || 10;
 if (Number.isNaN(boardSize)) boardSize = 10;
 boardSize = Math.max(5, Math.min(20, boardSize)); // Clamp to allowed range
 
-// NEW FLAG: enable some 1x2 tiles when diffSquares=1
+// NEW FLAG: enable some 1x2 tiles when diffSquares=1 — creates a few 1x2 primary spans
 const diffSquares = params.get('diffSquares') === '1';
 
+// Predefined palette and a per-player data object (territories/totalPieces computed later)
 const playerColors = ["#ff7b7b","#7bb8ff","#7bff9b","#ffcf7b","#be7bff","#4dd2d2","#ff88d1","#e6e66a"];
 const playerData = Array.from({length:players}, (_,i)=>({id:i+1,color:playerColors[i],territories:0,totalPieces:0,alive:true}));
 
-// DOM refs
+// DOM refs (cached frequently used elements)
 const boardEl = document.getElementById('board');
 const turnDisplay = document.getElementById('turnDisplay');
 const endTurnBtn = document.getElementById('endTurnBtn');
@@ -89,8 +109,17 @@ const saveBtn = document.getElementById('saveBtn');
 const loadBtn = document.getElementById('loadBtn');
 const diceCloseBtn = document.getElementById('diceClose');
 
+// Timer handle used to auto-hide the dice overlay
 let diceHideTimer = null;
 
+// --- Board construction ---
+// We use CSS grid on #board and dynamically create only "primary" elements.
+// Primary cells have an element and may span two grid indices when diffSquares is enabled.
+// Non-primary (covered) cells hold metadata pointing back to their primary.
+// The JS below computes the grid positions and creates DOM nodes accordingly.
+// The grid template is set to repeat(boardSize) in both axes so each cell is 1fr.
+// For 1x2 spans we set gridRowEnd or gridColumnEnd to `span 2` on the primary element.
+// (This keeps layout simple and avoids creating DOM nodes for covered indices.)
 // build board
 boardEl.style.gridTemplateColumns = `repeat(${boardSize}, 1fr)`;
 boardEl.style.gridTemplateRows = `repeat(${boardSize}, 1fr)`;
@@ -101,13 +130,16 @@ const totalCells = boardSize * boardSize;
 // Covered entries will have .coveredBy = primaryIndex and primary=false.
 const cells = new Array(totalCells);
 
+// --- Helper utilities ---
 // Helpers for grid placements
 function rcToIndex(r,c){ return r*boardSize + c; }
 function indexToRC(idx){ return { r: Math.floor(idx/boardSize), c: idx%boardSize }; }
 
 // utilities
+// Small helper utilities used throughout the game
 function shuffle(array){ for(let i=array.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [array[i],array[j]]=[array[j],array[i]];} return array; }
 function randInt(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
+// Pick readable (black/white) text color based on hex background -- used to keep counters legible
 function textColorForHex(hex){ const h=hex.replace('#',''); const r=parseInt(h.substring(0,2),16); const g=parseInt(h.substring(2,4),16); const b=parseInt(h.substring(4,6),16); return ((r*299+g*587+b*114)/1000)>150 ? '#000' : '#fff'; }
 
 // --- NEW: improved placement algorithm for vertical + horizontal 1x2 spans ---
@@ -117,11 +149,17 @@ function textColorForHex(hex){ const h=hex.replace('#',''); const r=parseInt(h.s
 //  - include both vertical and horizontal spans
 //  - scale number of spans with board size (small boards fewer, larger boards more)
 
+// Manhattan distance helper (grid-based distance used to avoid adjacency when placing spans)
 function manhattan(a,b){ const ar = Math.floor(a/boardSize), ac = a%boardSize; const br = Math.floor(b/boardSize), bc = b%boardSize; return Math.abs(ar-br) + Math.abs(ac-bc); }
 
 const occupied = new Set();         // all occupied indices (covered by any span)
 const primaryMap = {};              // primaryIndex -> { span: [i,...], orient: 'v'|'h' }
 
+// If diffSquares flag is set, place a number of 1x2 spans across the board.
+// The algorithm ensures:
+//  - spans don't overlap
+//  - spans aren't orthogonally adjacent to another span (keeps them useful)
+//  - both vertical and horizontal spans are allowed
 if (diffSquares) {
   // Determine target number of spans
   // Small boards: mild count; large boards: scale with area so bigger maps get noticeably more spans
@@ -163,10 +201,10 @@ if (diffSquares) {
       covered = [ top, rcToIndex(rc.r, rc.c + 1) ];
     }
 
-    // Availability: ensure none of the covered indices already occupied
+  // Availability: ensure none of the covered indices already occupied
     if (covered.some(ci => occupied.has(ci))) continue;
 
-    // Ensure candidate is not orthogonally adjacent to any existing placed span
+  // Ensure candidate is not orthogonally adjacent to any existing placed span
     let ok = true;
     for (const p of placed){
       const primCovered = p.span;
@@ -189,7 +227,9 @@ if (diffSquares) {
   // done placement
 }
 
-// Create DOM elements for primary cells only
+// --- Create DOM elements for primary cells only ---
+// Create only primary elements. Covered indices are represented in `cells` but don't get DOM nodes.
+// Primaries that span two indices receive gridRowEnd or gridColumnEnd = `span 2`.
 for (let r=0;r<boardSize;r++){
   for (let c=0;c<boardSize;c++){
     const i = rcToIndex(r,c);
@@ -197,9 +237,9 @@ for (let r=0;r<boardSize;r++){
     // If this index is a primaryMap key => create primary element with orientation
     if (primaryMap[i]){
       const info = primaryMap[i];
-      const el = document.createElement('div');
-      el.className = 'cell';
-      el.dataset.index = i;
+  const el = document.createElement('div');
+  el.className = 'cell';
+  el.dataset.index = i;
       if (info.orient === 'v'){
         el.style.gridRowStart = (r+1);
         el.style.gridRowEnd = `span 2`;
@@ -209,7 +249,7 @@ for (let r=0;r<boardSize;r++){
         el.style.gridColumnStart = (c+1);
         el.style.gridColumnEnd = `span 2`;
       }
-      boardEl.appendChild(el);
+  boardEl.appendChild(el);
       cells[i] = { index: i, element: el, owner: null, pieces: 0, primary: true, span: info.span.slice() };
       // mark covered (other) index as non-primary
       for (const ci of info.span){
@@ -224,7 +264,7 @@ for (let r=0;r<boardSize;r++){
       continue;
     }
 
-    // Normal single cell
+  // Normal single cell (non-spanning primary)
     const el = document.createElement('div');
     el.className = 'cell';
     el.dataset.index = i;
@@ -323,6 +363,10 @@ function recalcPlayerTotals(){
   playerData.forEach(p=>p.alive = p.territories>0);
 }
 function renderPlayerInfo(){ recalcPlayerTotals(); infoEl.innerHTML=''; playerData.forEach(p=>{ const badge=document.createElement('div'); badge.className='player-badge'; badge.innerHTML=`<div class="swatch" style="background:${p.color}"></div><div>P${p.id}</div><div style="opacity:.7">T:${p.territories}</div><div style="opacity:.7">S:${p.totalPieces}</div>`; infoEl.appendChild(badge); }); }
+
+// --- Dice UI helpers and animations ---
+// The dice overlay shows attacker/defender dice, animates face rolls and displays totals.
+// Dice are represented as simple white squares with pip elements generated by `renderDieFace`.
 
 // initial distribution (random round-robin) with random pieces 1..5,
 // but only assign to primary cells and mirror ownership to covered indices so other code doesn't freak out.
@@ -441,7 +485,7 @@ function showBattleLog(text, short=true){
 
 function clearDiceUI(){ attRow.innerHTML=''; defRow.innerHTML=''; attTotalEl.textContent='0'; defTotalEl.textContent='0'; attCountEl.textContent='0'; defCountEl.textContent='0'; }
 function showDiceOverlay(attCount, defCount){
-  battleOverlay.style.display='flex';
+  // Make overlay visible via aria-hidden — CSS handles display
   battleOverlay.setAttribute('aria-hidden','false');
   attCountEl.textContent = attCount;
   defCountEl.textContent = defCount;
@@ -505,6 +549,13 @@ function shakeBoard(){ boardEl.classList.add('shake'); setTimeout(()=> boardEl.c
 /* Attack flow */
 let locked = false;
 function performAttackAnimated(srcIdx, tgtIdx){
+  // High-level flow:
+  // - Validate attack conditions (ownership, adjacency, pieces)
+  // - Determine dice counts and show dice overlay
+  // - Roll dice, animate faces, compute sums
+  // - If attacker wins: animate pawn transfer, change owner/pieces on target
+  // - If defender wins: decrement attacker pieces
+  // - Recompute and render player info, and re-enable UI after a short delay
   if (locked) return;
   const src = getPrimaryCell(srcIdx);
   const tgt = getPrimaryCell(tgtIdx);
@@ -562,8 +613,9 @@ function performAttackAnimated(srcIdx, tgtIdx){
       if (commitRaw >= 4 || defSum >= 8) shakeBoard();
       showBattleLog('Capture! ' + summary);
 
-      hideDiceOverlayAfter(3000);
-      setTimeout(()=>{ locked = false; if (!(src.owner === currentPlayer && src.pieces > 1)) clearSelection(); renderPlayerInfo(); checkPlayerElimination(); checkWinCondition(); }, 3000);
+  // Keep overlay visible for a bit to allow the player to see results, then hide and unlock input
+  hideDiceOverlayAfter(3000);
+  setTimeout(()=>{ locked = false; if (!(src.owner === currentPlayer && src.pieces > 1)) clearSelection(); renderPlayerInfo(); checkPlayerElimination(); checkWinCondition(); }, 3000);
 
     } else {
       playDefendSound();
@@ -572,6 +624,7 @@ function performAttackAnimated(srcIdx, tgtIdx){
       src.element.classList.add('flash-defend');
       setTimeout(()=> src.element.classList.remove('flash-defend'), 700);
       showBattleLog('Defended. ' + summary);
+      // Defender held: show defend animation and then hide overlay/unlock
       hideDiceOverlayAfter(3000);
       setTimeout(()=>{ locked = false; if (!(src.owner === currentPlayer && src.pieces > 1)) clearSelection(); renderPlayerInfo(); checkPlayerElimination(); checkWinCondition(); }, 3000);
     }
@@ -646,7 +699,14 @@ diceCloseBtn.addEventListener('click', ()=>{ hideDiceOverlayNow(); });
 function checkPlayerElimination(){ recalcPlayerTotals(); }
 function checkWinCondition(){ recalcPlayerTotals(); const alivePlayers = playerData.filter(p=>p.alive); if (alivePlayers.length === 1){ const winner = alivePlayers[0]; setTimeout(()=> alert(`Player ${winner.id} wins!`), 40); } }
 
-/* Save / Load */
+/*
+  Save / Load
+
+  - saveGameState: serializes the minimal representation of the board (owner & pieces per index),
+    playerData (to preserve colours/totals), boardSize and diffSquares to localStorage.
+  - loadGameState: validates the saved state, maps owners/pieces back to our `cells` array and
+    updates primary DOM elements. It preserves compatibility by storing values per-grid-index.
+*/
 function saveGameState() { 
   // Save owner/pieces for every grid index so save/load remains compatible
   const state = { currentPlayer, cells: cells.map(c => ({ owner: c ? c.owner : null, pieces: c ? c.pieces : 0 })), playerData: playerData.map(p => ({ id: p.id, color: p.color, territories: p.territories, totalPieces: p.totalPieces, alive: p.alive })), boardSize, diffSquares }; 
@@ -675,7 +735,8 @@ function loadGameState() {
 saveBtn.addEventListener('click', saveGameState);
 loadBtn.addEventListener('click', loadGameState);
 
-/* Initialize game */
+/* Initialization */
+// Populate board with initial ownership/pieces and refresh UI
 assignStartingCells();
 updateTurnDisplay();
 
