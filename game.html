@@ -90,7 +90,7 @@ const diffSquares = params.get('diffSquares') === '1';
 
 // Predefined palette and a per-player data object (territories/totalPieces computed later)
 const playerColors = ["#ff7b7b","#7bb8ff","#7bff9b","#ffcf7b","#be7bff","#4dd2d2","#ff88d1","#e6e66a"];
-const playerData = Array.from({length:players}, (_,i)=>({id:i+1,color:playerColors[i],territories:0,totalPieces:0,alive:true}));
+const playerData = Array.from({length:players}, (_,i)=>({id:i+1,color:playerColors[i],territories:0,totalPieces:0,alive:true,ally:null,pendingOfferFrom:null,pendingOfferTo:null,allyBlockedUntilRound:0}));
 
 // DOM refs (cached frequently used elements)
 const boardEl = document.getElementById('board');
@@ -351,6 +351,11 @@ function animateNumber(cellObj, newVal, duration = 500){
 }
 
 // render player info badges
+let roundCounter = 1; // increments when a full rotation of turns completes
+let roundStartPlayer = 1; // the player id that marks the start of a round
+// blockedAlliances holds objects {a: playerA, b: playerB, untilRound: n} preventing attacks between that pair until roundCounter >= untilRound
+const blockedAlliances = [];
+
 function recalcPlayerTotals(){ 
   playerData.forEach(p=>{p.territories=0;p.totalPieces=0});
   // count only primary cells as territories (so a 1x2 counts as 1 territory)
@@ -362,7 +367,88 @@ function recalcPlayerTotals(){
   });
   playerData.forEach(p=>p.alive = p.territories>0);
 }
-function renderPlayerInfo(){ recalcPlayerTotals(); infoEl.innerHTML=''; playerData.forEach(p=>{ const badge=document.createElement('div'); badge.className='player-badge'; badge.innerHTML=`<div class="swatch" style="background:${p.color}"></div><div>P${p.id}</div><div style="opacity:.7">T:${p.territories}</div><div style="opacity:.7">S:${p.totalPieces}</div>`; infoEl.appendChild(badge); }); }
+function clearAlliancePendingBetween(a,b){
+  if (playerData[a-1]) playerData[a-1].pendingOfferTo = null;
+  if (playerData[b-1]) playerData[b-1].pendingOfferFrom = null;
+}
+
+function offerAlliance(targetId){
+  if (players < 3) { showBattleLog('Alliances disabled for 2-player games.'); return; }
+  const from = currentPlayer;
+  if (playerData[from-1].ally) { showBattleLog('You already have an ally.'); return; }
+  if (playerData[targetId-1].ally) { showBattleLog('Target already allied.'); return; }
+  // can't offer to yourself
+  if (from === targetId) return;
+  playerData[targetId-1].pendingOfferFrom = from;
+  playerData[from-1].pendingOfferTo = targetId;
+  renderPlayerInfo();
+  showBattleLog(`Alliance offer sent to P${targetId}`);
+}
+
+function cancelOffer(targetId){
+  const from = currentPlayer;
+  if (playerData[from-1].pendingOfferTo === targetId) {
+    playerData[from-1].pendingOfferTo = null;
+    if (playerData[targetId-1]) playerData[targetId-1].pendingOfferFrom = null;
+    renderPlayerInfo();
+    showBattleLog(`Cancelled offer to P${targetId}`);
+  }
+}
+
+function acceptAlliance(fromId){
+  const target = currentPlayer;
+  if (players < 3) { showBattleLog('Alliances disabled for 2-player games.'); return; }
+  if (!playerData[target-1].pendingOfferFrom || playerData[target-1].pendingOfferFrom !== fromId) return;
+  if (playerData[target-1].ally || playerData[fromId-1].ally) { clearAlliancePendingBetween(fromId, target); renderPlayerInfo(); return; }
+  playerData[target-1].ally = fromId;
+  playerData[fromId-1].ally = target;
+  clearAlliancePendingBetween(fromId, target);
+  renderPlayerInfo();
+  showBattleLog(`P${target} and P${fromId} are now allies`);
+}
+
+function breakAllianceWith(targetId){
+  const a = currentPlayer;
+  const b = targetId;
+  if (!playerData[a-1] || !playerData[b-1]) return;
+  if (playerData[a-1].ally !== b && playerData[b-1].ally !== a) return;
+  // break alliance and record blocked pair until next round
+  playerData[a-1].ally = null;
+  playerData[b-1].ally = null;
+  const blockedUntil = roundCounter + 1;
+  blockedAlliances.push({ a, b, untilRound: blockedUntil });
+  clearAlliancePendingBetween(a,b);
+  renderPlayerInfo();
+  showBattleLog(`Alliance between P${a} and P${b} ended. They cannot be attacked until next round.`);
+}
+
+// render UI for player badges (offers/accept/break)
+function renderPlayerInfo(){ recalcPlayerTotals(); infoEl.innerHTML=''; playerData.forEach(p=>{ const badge=document.createElement('div'); badge.className='player-badge';
+    // base info
+    const allyText = p.ally ? ` • Ally:P${p.ally}` : '';
+    badge.innerHTML=`<div class="swatch" style="background:${p.color}"></div><div>P${p.id}${allyText}</div><div style="opacity:.7">T:${p.territories}</div><div style="opacity:.7">S:${p.totalPieces}</div>`;
+    // alliance controls (only for 3+ players and not-self)
+    if (players >= 3 && p.id !== currentPlayer){
+      const ctrl = document.createElement('div'); ctrl.style.marginLeft='8px';
+      // If this player is current player's ally -> show Break
+      if (playerData[currentPlayer-1].ally === p.id){
+        const btn = document.createElement('button'); btn.textContent='Break'; btn.addEventListener('click', ()=> breakAllianceWith(p.id)); ctrl.appendChild(btn);
+      } else if (playerData[p.id-1].pendingOfferFrom === currentPlayer){
+        // Offer pending: show cancel option for the offering player
+        const btn = document.createElement('button'); btn.textContent='Cancel Offer'; btn.addEventListener('click', ()=> cancelOffer(p.id)); ctrl.appendChild(btn);
+      } else if (playerData[currentPlayer-1].pendingOfferFrom === p.id){
+        // Current player has an incoming offer from this player -> show Accept
+        const btn = document.createElement('button'); btn.textContent='Accept'; btn.addEventListener('click', ()=> acceptAlliance(p.id)); ctrl.appendChild(btn);
+      } else if (playerData[p.id-1].ally){
+        // Target already allied with someone else — show disabled
+        const span = document.createElement('span'); span.textContent='Ally'; span.style.opacity='0.6'; ctrl.appendChild(span);
+      } else {
+        const btn = document.createElement('button'); btn.textContent='Offer'; btn.addEventListener('click', ()=> offerAlliance(p.id)); ctrl.appendChild(btn);
+      }
+      badge.appendChild(ctrl);
+    }
+    infoEl.appendChild(badge);
+  }); }
 
 // --- Dice UI helpers and animations ---
 // The dice overlay shows attacker/defender dice, animates face rolls and displays totals.
@@ -486,6 +572,8 @@ function showBattleLog(text, short=true){
 function clearDiceUI(){ attRow.innerHTML=''; defRow.innerHTML=''; attTotalEl.textContent='0'; defTotalEl.textContent='0'; attCountEl.textContent='0'; defCountEl.textContent='0'; }
 function showDiceOverlay(attCount, defCount){
   // Make overlay visible via aria-hidden — CSS handles display
+  // remove any inline display:none set by hide functions so CSS can show it again
+  battleOverlay.style.display = '';
   battleOverlay.setAttribute('aria-hidden','false');
   attCountEl.textContent = attCount;
   defCountEl.textContent = defCount;
@@ -562,6 +650,21 @@ function performAttackAnimated(srcIdx, tgtIdx){
   if (!src || !tgt) return;
   if (src.owner !== currentPlayer) return;
   if (!tgt.owner || tgt.owner === currentPlayer) return;
+  // Disallow attacks between allies
+  const attacker = currentPlayer;
+  const defender = tgt.owner;
+  if (players >= 3){
+    if (playerData[attacker-1].ally === defender && playerData[defender-1].ally === attacker){
+      showBattleLog('Cannot attack an ally.');
+      return;
+    }
+    // Check blockedAlliances (recently broken)
+    for (const b of blockedAlliances){
+      if ( (b.a === attacker && b.b === defender) || (b.a === defender && b.b === attacker) ){
+        if (roundCounter < b.untilRound){ showBattleLog('Cannot attack this player until next round.'); return; }
+      }
+    }
+  }
   if (!isAdjacent(src.index, tgt.index)) return;
 
   const commitRaw = Math.max(0, src.pieces - 1);
@@ -638,7 +741,30 @@ function nextAlivePlayer(from){ for (let step=1; step<=players; step++){ const c
 let endTurnCooldown = 0; let endTurnTimer = null;
 function startEndTurnCooldown(seconds = 5) { endTurnBtn.disabled = true; endTurnCooldown = seconds; endTurnBtn.textContent = `End Turn (${endTurnCooldown})`; clearInterval(endTurnTimer); endTurnTimer = setInterval(() => { endTurnCooldown--; if (endTurnCooldown > 0) { endTurnBtn.textContent = `End Turn (${endTurnCooldown})`; } else { clearInterval(endTurnTimer); endTurnBtn.disabled = false; endTurnBtn.textContent = "End Turn"; } }, 1000); }
 
-endTurnBtn.addEventListener('click', ()=>{ if (locked || endTurnBtn.disabled) return; distributeReinforcementsForPlayer(currentPlayer); const nxt = nextAlivePlayer(currentPlayer); if (nxt !== null && nxt !== currentPlayer) currentPlayer = nxt; updateTurnDisplay(); setTimeout(()=>{ renderPlayerInfo(); checkWinCondition(); }, 420); startEndTurnCooldown(5); });
+// endTurn button handling is wired later to support round tracking
+
+// Advance roundCounter when we complete a full rotation of turns
+function advanceToNextPlayer(){
+  const nxt = nextAlivePlayer(currentPlayer);
+  if (nxt !== null && nxt !== currentPlayer) {
+    currentPlayer = nxt;
+    // if we've wrapped around to roundStartPlayer, increment round
+    if (currentPlayer === roundStartPlayer){
+      roundCounter++;
+      // clear expired blockedAlliances
+      for (let i = blockedAlliances.length-1; i>=0; i--){
+        if (roundCounter >= blockedAlliances[i].untilRound) blockedAlliances.splice(i,1);
+      }
+    }
+    updateTurnDisplay();
+    setTimeout(()=>{ renderPlayerInfo(); checkWinCondition(); }, 420);
+    startEndTurnCooldown(5);
+  }
+}
+
+// wire the existing endTurn button to new flow
+endTurnBtn.removeEventListener('click', ()=>{});
+endTurnBtn.addEventListener('click', ()=>{ if (locked || endTurnBtn.disabled) return; distributeReinforcementsForPlayer(currentPlayer); advanceToNextPlayer(); });
 
 function clearSelection(){ if (typeof selectedCell !== 'undefined' && selectedCell !== null) { const selPrimary = getPrimaryCell(selectedCell); if (selPrimary && selPrimary.element) selPrimary.element.classList.remove('selected'); } selectedCell=null; }
 let selectedCell = null;
@@ -709,7 +835,15 @@ function checkWinCondition(){ recalcPlayerTotals(); const alivePlayers = playerD
 */
 function saveGameState() { 
   // Save owner/pieces for every grid index so save/load remains compatible
-  const state = { currentPlayer, cells: cells.map(c => ({ owner: c ? c.owner : null, pieces: c ? c.pieces : 0 })), playerData: playerData.map(p => ({ id: p.id, color: p.color, territories: p.territories, totalPieces: p.totalPieces, alive: p.alive })), boardSize, diffSquares }; 
+  const state = {
+    currentPlayer,
+    cells: cells.map(c => ({ owner: c ? c.owner : null, pieces: c ? c.pieces : 0 })),
+    playerData: playerData.map(p => ({ id: p.id, color: p.color, territories: p.territories, totalPieces: p.totalPieces, alive: p.alive, ally: p.ally })),
+    blockedAlliances,
+    roundCounter,
+    boardSize,
+    diffSquares
+  };
   try { localStorage.setItem('squareLordsSave', JSON.stringify(state)); alert('Game state saved!'); } catch (e) { console.error('Save failed', e); alert('Failed to save game state.'); } 
 }
 function loadGameState() { 
@@ -727,9 +861,11 @@ function loadGameState() {
       const pr = getPrimaryCell(i);
       if (pr && pr.element) updateCell(pr);
     }
-    if (typeof state.currentPlayer === 'number') currentPlayer = state.currentPlayer; 
-    if (Array.isArray(state.playerData)){ state.playerData.forEach((p, i) => { if (playerData[i]) Object.assign(playerData[i], p); }); } 
-    updateTurnDisplay(); renderPlayerInfo(); alert('Game loaded.'); return true; 
+  if (typeof state.currentPlayer === 'number') currentPlayer = state.currentPlayer; 
+  if (Array.isArray(state.playerData)){ state.playerData.forEach((p, i) => { if (playerData[i]) Object.assign(playerData[i], p); }); }
+  if (Array.isArray(state.blockedAlliances)) { blockedAlliances.length = 0; state.blockedAlliances.forEach(b => { if (b && typeof b.a === 'number' && typeof b.b === 'number' && typeof b.untilRound === 'number') blockedAlliances.push(b); }); }
+  if (typeof state.roundCounter === 'number') roundCounter = state.roundCounter;
+  updateTurnDisplay(); renderPlayerInfo(); alert('Game loaded.'); return true; 
   } catch (e) { console.error('Failed to load save:', e); alert('Failed to load save data.'); return false; } 
 }
 saveBtn.addEventListener('click', saveGameState);
