@@ -39,16 +39,23 @@ Got ideas? Found bugs?
 - [x] Add cache or saving mechanism
 - [x] Add a timer to the end button, so you cannot spam
 - [x] Add a max number to each square
-- [X] Add different sized squares
+- [x] Add different sized squares
 - [ ] Mobile-friendly controls (important!)
 - [ ] Add a win page
 - [ ] More themes and board styles
+- [ ] Expanded win/end game screen with stats
 - [ ] Make the board more clear to use
 
 ### Future:
 - [ ] Add AI opponents
 - [ ] Online multiplayer
-- [ ] Bug fixing  
+- [ ] Bug fixing
+- [ ] Terrain effects
+- [ ] Unit types with different combat rules
+- [ ] Custom maps with countries instead of generic grid
+- [ ] Improve mobile UX and responsive design
+- [ ] Visual clarity improvements
+
 
 ---
 
